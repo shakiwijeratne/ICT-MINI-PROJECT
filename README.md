@@ -14,10 +14,10 @@ Ensure you have the necessary runtime environment installed (Node.js).
 Open your terminal and run the following commands:
 
 Bash
-# Clone the repository to your local machine
+### Clone the repository to your local machine
 git clone https://github.com/shakiwijeratne/ICT-MINI-PROJECT.git
 
-# Enter the project folder
+### Enter the project folder
 cd ICT-MINI-PROJECT
 3. Set Up Your Dedicated Branch
 Do not work directly on main or dev/shakila. Create your own branch to keep your changes isolated:
