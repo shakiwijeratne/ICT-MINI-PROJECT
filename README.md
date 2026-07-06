@@ -2,6 +2,50 @@
 
 Web-based platform for internship tracking, reporting, evaluation, and progress monitoring, developed for **IIC 3341 ICT Project**, University of Sri Jayewardenepura.
 
+## Project Setup Guide
+Please follow these steps to set up the project on your local machine.
+
+1. Prerequisites
+Ensure you have Git installed on your computer.
+
+Ensure you have the necessary runtime environment installed (Node.js).
+
+2. Clone the Repository
+Open your terminal and run the following commands:
+
+Bash
+# Clone the repository to your local machine
+git clone https://github.com/shakiwijeratne/ICT-MINI-PROJECT.git
+
+# Enter the project folder
+cd ICT-MINI-PROJECT
+3. Set Up Your Dedicated Branch
+Do not work directly on main or dev/shakila. Create your own branch to keep your changes isolated:
+
+### Create and switch to your own branch
+git checkout -b dev/<your-name>
+current branches: 
+dev/hashini
+dev/vishmi
+dev/chameesha
+dev/rangana
+
+4. Environment Configuration
+For security reasons, the .env file is not tracked by Git.
+
+Locate the .env.example file in the root folder.
+Create a copy of it and name it .env.
+Open .env and fill in the required API keys or database credentials (shared via WhatsApp group).
+
+5. Install Dependencies & Run
+If Node.js: Run npm install followed by npm start.
+
+6. Collaborative Workflow
+To keep our code synchronized, follow this cycle:
+Pull updates: Before starting, run git pull origin main to get the latest stable code.
+Commit changes: git add . then git commit -m "Your descriptive message"
+Push to your branch: git push -u origin dev/<your-name>
+
 ## Features
 
 - **Role-based access** - Student, University Supervisor, Company, Administrator
