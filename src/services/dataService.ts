@@ -17,234 +17,145 @@ import type {
   Internship,
   SkillEvaluation,
   AppNotification,
-  CompanyFeedback
+  CompanyFeedback,
 } from '../types';
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
 function id(): string {
   return crypto.randomUUID();
 }
 
-// Diary
-export async function getDiaries(studentId?: string): Promise<DiaryEntry[]> {
+// ============================================================================
+// Diary Operations
+// ============================================================================
+
+// 1. GET DIARIES - MUST map docSnap.id to entry.id
+export async function getDiaries(studentId: string): Promise<DiaryEntry[]> {
   if (isFirebaseConfigured && db) {
-    const q = studentId
-      ? query(collection(db, 'diaries'), where('studentId', '==', studentId), orderBy('date', 'desc'))
-      : query(collection(db, 'diaries'), orderBy('date', 'desc'));
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as DiaryEntry));
+    try {
+      const q = query(collection(db, "diaries"), where("studentId", "==", studentId));
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map((docSnap) => ({
+        ...(docSnap.data() as DiaryEntry),
+        id: docSnap.id, // OVERWRITE local id with actual Firestore Document ID
+      }));
+    } catch (error) {
+      console.error("Error fetching diaries from Firestore:", error);
+      throw error;
+    }
   }
-  const all = localStore.getDiaries();
-  return studentId ? all.filter((d) => d.studentId === studentId) : all;
+
+  // Fallback to local store if DB is not active
+  return localStore.getDiaries().filter(d => d.studentId === studentId);
 }
 
-export async function createDiary(
-  entry: Omit<
-    DiaryEntry,
-    'id' |
-    'createdAt' |
-    'status' |
-    'reviewedBy' |
-    'reviewedAt' |
-    'supervisorFeedback'
-  >
-): Promise<DiaryEntry> {
+export async function createDiary(data: Omit<DiaryEntry, 'id'>): Promise<string> {
+  // Use a clean ISO timestamp string
+  const payload = {
+    ...data,
+    createdAt: new Date().toISOString(),
+  };
 
+  if (isFirebaseConfigured && db) {
+    try {
+      const cleanData = JSON.parse(JSON.stringify(payload));
+      const docRef = await addDoc(collection(db, "diaries"), cleanData);
+      return docRef.id;
+    } catch (error) {
+      console.error("Firestore createDoc error:", error);
+      throw error;
+    }
+  }
 
-const diaryData = {
-
- ...entry,
-
- status:"pending",
-
- createdAt:new Date().toISOString(),
-
- reviewedBy:"",
-
- reviewedAt:"",
-
- supervisorFeedback:""
-
-};
-
-
-if(isFirebaseConfigured && db){
-
- const ref = await addDoc(
-   collection(db,"diaries"),
-   diaryData
- );
-
-
- return {
-
-   id:ref.id,
-
-   ...diaryData
-
- } as DiaryEntry;
-
-
+  // Local store fallback
+  const newEntry: DiaryEntry = {
+    id: Date.now().toString(),
+    ...payload,
+  };
+  const current = localStore.getDiaries();
+  localStore.setDiaries([newEntry, ...current]);
+  return newEntry.id;
 }
 
+export async function updateDiary(diaryId: string, data: Partial<DiaryEntry>): Promise<void> {
+  if (isFirebaseConfigured && db) {
+    const diaryRef = doc(db, 'diaries', diaryId);
+    await updateDoc(diaryRef, {
+      ...data,
+      updatedAt: new Date().toISOString(),
+    });
+    return;
+  }
 
+  const updated = localStore.getDiaries().map((d) =>
+    d.id === diaryId
+      ? {
+          ...d,
+          ...data,
+          updatedAt: new Date().toISOString(),
+        }
+      : d
+  );
 
-const full={
- id:id(),
- ...diaryData
-} as DiaryEntry;
-
-
-
-const items=localStore.getDiaries();
-
-items.unshift(full);
-
-localStore.setDiaries(items);
-
-
-return full;
-
-
-}
-   
-
-export async function updateDiary(
- diaryId:string,
- data:Partial<DiaryEntry>
-):Promise<void>{
-
-
-if(isFirebaseConfigured && db){
-
-
-const diaryRef =
-doc(db,"diaries",diaryId);
-
-
-
-await updateDoc(
- diaryRef,
- {
-
- ...data,
-
- updatedAt:new Date().toISOString()
-
- }
-);
-
-
-return;
-
+  localStore.setDiaries(updated);
 }
 
+// 2. DELETE DIARY - Target exact document reference
+export async function deleteDiary(diaryId: string): Promise<void> {
+  if (isFirebaseConfigured && db) {
+    try {
+      const docRef = doc(db, "diaries", diaryId);
+      await deleteDoc(docRef);
+      return;
+    } catch (error) {
+      console.error("Firestore deletion failed:", error);
+      throw error;
+    }
+  }
 
-
-const updated =
-localStore
-.getDiaries()
-.map(d=>
-
-d.id===diaryId
-
-?
-{
-...d,
-...data,
-updatedAt:new Date().toISOString()
+  // Local fallback
+  const remaining = localStore.getDiaries().filter((d) => d.id !== diaryId);
+  localStore.setDiaries(remaining);
 }
 
-:
-d
-
-);
-
-
-
-localStore.setDiaries(updated);
-
-
-}
-
-
-export async function deleteDiary(
- diaryId:string
-):Promise<void>{
-
-
-if(isFirebaseConfigured && db){
-
-
-await deleteDoc(
- doc(db,"diaries",diaryId)
-);
-
-
-return;
-
-
-}
-
-
-
-const remaining =
-localStore
-.getDiaries()
-.filter(
-d=>d.id!==diaryId
-);
-
-
-
-localStore.setDiaries(
-remaining
-);
-
-
-
-}
-
-// ==============================
-// Diary Approval Workflow
-// ==============================
+// ----------------------------------------------------------------------------
+// Diary Workflow
+// ----------------------------------------------------------------------------
 
 export async function approveDiary(
-  diaryId:string,
-  supervisorId:string,
-  feedback?:string
-):Promise<void>{
-
-await updateDiary(
-  diaryId,
-  {
-    status:"approved",
-    reviewedBy:supervisorId,
-    supervisorFeedback:feedback ?? "",
-    reviewedAt:new Date().toISOString()
-  }
-);
-
+  diaryId: string,
+  supervisorId: string,
+  feedback?: string
+): Promise<void> {
+  await updateDiary(diaryId, {
+    status: 'approved',
+    reviewedBy: supervisorId,
+    supervisorFeedback: feedback ?? '',
+    reviewedAt: new Date().toISOString(),
+  });
 }
 
 export async function rejectDiary(
-  diaryId:string,
-  supervisorId:string,
-  feedback:string
-):Promise<void>{
-
-await updateDiary(
- diaryId,
- {
-  status:"rejected",
-  reviewedBy:supervisorId,
-  supervisorFeedback:feedback,
-  reviewedAt:new Date().toISOString()
- }
-);
-
+  diaryId: string,
+  supervisorId: string,
+  feedback: string
+): Promise<void> {
+  await updateDiary(diaryId, {
+    status: 'rejected',
+    reviewedBy: supervisorId,
+    supervisorFeedback: feedback,
+    reviewedAt: new Date().toISOString(),
+  });
 }
 
-// Reports
+// ============================================================================
+// Weekly Report Operations
+// ============================================================================
+
 export async function getReports(studentId?: string): Promise<WeeklyReport[]> {
   if (isFirebaseConfigured && db) {
     const q = studentId
@@ -253,19 +164,29 @@ export async function getReports(studentId?: string): Promise<WeeklyReport[]> {
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as WeeklyReport));
   }
+
   const all = localStore.getReports();
   return studentId ? all.filter((r) => r.studentId === studentId) : all;
 }
 
-export async function createReport(report: Omit<WeeklyReport, 'id' | 'generatedAt'>): Promise<WeeklyReport> {
-  const full: WeeklyReport = { ...report, id: id(), generatedAt: new Date().toISOString() };
+export async function createReport(
+  report: Omit<WeeklyReport, 'id' | 'generatedAt'>
+): Promise<WeeklyReport> {
+  const full: WeeklyReport = {
+    ...report,
+    id: id(),
+    generatedAt: new Date().toISOString(),
+  };
+
   if (isFirebaseConfigured && db) {
     const ref = await addDoc(collection(db, 'reports'), full);
     return { ...full, id: ref.id };
   }
+
   const items = localStore.getReports();
   items.unshift(full);
   localStore.setReports(items);
+
   return full;
 }
 
@@ -274,101 +195,101 @@ export async function updateReport(reportId: string, data: Partial<WeeklyReport>
     await updateDoc(doc(db, 'reports', reportId), data);
     return;
   }
+
   const items = localStore.getReports().map((r) => (r.id === reportId ? { ...r, ...data } : r));
   localStore.setReports(items);
 }
 
-// ==============================
+// ----------------------------------------------------------------------------
 // Report Workflow
-// ==============================
+// ----------------------------------------------------------------------------
 
-
-export async function submitReport(
-reportId:string
-){
-
-await updateReport(
-reportId,
-{
-status:"submitted",
-submittedAt:new Date().toISOString()
-}
-);
-
+export async function submitReport(reportId: string): Promise<void> {
+  await updateReport(reportId, {
+    status: 'submitted',
+    submittedAt: new Date().toISOString(),
+  });
 }
 
-
-
-export async function verifyReportByCompany(
-reportId:string,
-feedback:string
-){
-
-await updateReport(
-reportId,
-{
-status:"company_verified",
-companyFeedback:feedback,
-companyVerifiedAt:new Date().toISOString()
-}
-);
-
+export async function verifyReportByCompany(reportId: string, feedback: string): Promise<void> {
+  await updateReport(reportId, {
+    status: 'company_verified',
+    companyFeedback: feedback,
+    companyVerifiedAt: new Date().toISOString(),
+  });
 }
 
-
-
-export async function approveReportBySupervisor(
-reportId:string,
-feedback:string
-){
-
-await updateReport(
-reportId,
-{
-status:"supervisor_approved",
-supervisorFeedback:feedback,
-supervisorApprovedAt:new Date().toISOString()
+export async function approveReportBySupervisor(reportId: string, feedback: string): Promise<void> {
+  await updateReport(reportId, {
+    status: 'supervisor_approved',
+    supervisorFeedback: feedback,
+    supervisorApprovedAt: new Date().toISOString(),
+  });
 }
-);
 
-}
-// Internships
-export async function getInternships(filter?: { studentId?: string; supervisorId?: string }): Promise<Internship[]> {
+// ============================================================================
+// Internship Operations
+// ============================================================================
+
+export async function getInternships(filter?: {
+  studentId?: string;
+  supervisorId?: string;
+}): Promise<Internship[]> {
   if (isFirebaseConfigured && db) {
     const snap = await getDocs(collection(db, 'internships'));
     let items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Internship));
-    if (filter?.studentId) items = items.filter((i) => i.studentId === filter.studentId);
-    if (filter?.supervisorId) items = items.filter((i) => i.universitySupervisorId === filter.supervisorId);
+
+    if (filter?.studentId) {
+      items = items.filter((i) => i.studentId === filter.studentId);
+    }
+    if (filter?.supervisorId) {
+      items = items.filter((i) => i.universitySupervisorId === filter.supervisorId);
+    }
     return items;
   }
+
   let items = localStore.getInternships();
-  if (filter?.studentId) items = items.filter((i) => i.studentId === filter.studentId);
-  if (filter?.supervisorId) items = items.filter((i) => i.universitySupervisorId === filter.supervisorId);
+  if (filter?.studentId) {
+    items = items.filter((i) => i.studentId === filter.studentId);
+  }
+  if (filter?.supervisorId) {
+    items = items.filter((i) => i.universitySupervisorId === filter.supervisorId);
+  }
   return items;
 }
 
 export async function createInternship(data: Omit<Internship, 'id'>): Promise<Internship> {
   const full: Internship = { ...data, id: id() };
+
   if (isFirebaseConfigured && db) {
     const ref = await addDoc(collection(db, 'internships'), full);
     return { ...full, id: ref.id };
   }
+
   const items = localStore.getInternships();
   items.push(full);
   localStore.setInternships(items);
+
   return full;
 }
 
-export async function updateInternship(internshipId: string, data: Partial<Internship>): Promise<void> {
+export async function updateInternship(
+  internshipId: string,
+  data: Partial<Internship>
+): Promise<void> {
   if (isFirebaseConfigured && db) {
     await updateDoc(doc(db, 'internships', internshipId), data);
     return;
   }
+
   const items = localStore.getInternships().map((i) => (i.id === internshipId ? { ...i, ...data } : i));
   localStore.setInternships(items);
 }
 
-// Evaluations
+// ============================================================================
+// Skill Evaluation Operations
+// ============================================================================
+
 export async function getEvaluations(studentId?: string): Promise<SkillEvaluation[]> {
   if (isFirebaseConfigured && db) {
     const q = studentId
@@ -377,46 +298,79 @@ export async function getEvaluations(studentId?: string): Promise<SkillEvaluatio
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SkillEvaluation));
   }
+
   const all = localStore.getEvaluations();
   return studentId ? all.filter((e) => e.studentId === studentId) : all;
 }
 
-export async function createEvaluation(data: Omit<SkillEvaluation, 'id' | 'createdAt'>): Promise<SkillEvaluation> {
-  const full: SkillEvaluation = { ...data, id: id(), createdAt: new Date().toISOString() };
+export async function createEvaluation(
+  data: Omit<SkillEvaluation, 'id' | 'createdAt'>
+): Promise<SkillEvaluation> {
+  const full: SkillEvaluation = {
+    ...data,
+    id: id(),
+    createdAt: new Date().toISOString(),
+  };
+
   if (isFirebaseConfigured && db) {
     const ref = await addDoc(collection(db, 'evaluations'), full);
     return { ...full, id: ref.id };
   }
+
   const items = localStore.getEvaluations();
   items.push(full);
   localStore.setEvaluations(items);
+
   return full;
 }
 
-// Notifications
+// ============================================================================
+// Notification Operations
+// ============================================================================
+
 export async function getNotifications(userId: string): Promise<AppNotification[]> {
   if (isFirebaseConfigured && db) {
-    const q = query(collection(db, 'notifications'), where('userId', '==', userId), orderBy('createdAt', 'desc'));
+    const q = query(
+      collection(db, 'notifications'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as AppNotification));
   }
+
   return localStore.getNotifications().filter((n) => n.userId === userId);
 }
 
-export async function createNotification(data: Omit<AppNotification, 'id' | 'createdAt' | 'read'>): Promise<void> {
-  const full: AppNotification = {
+export async function createNotification(
+  data: Omit<AppNotification, 'id' | 'createdAt'>
+): Promise<string> {
+  const payload = {
     ...data,
-    id: id(),
-    read: false,
     createdAt: new Date().toISOString(),
+    read: false,
   };
+
   if (isFirebaseConfigured && db) {
-    await addDoc(collection(db, 'notifications'), full);
-    return;
+    try {
+      const cleanData = JSON.parse(JSON.stringify(payload));
+      const docRef = await addDoc(collection(db, "notifications"), cleanData);
+      return docRef.id;
+    } catch (error) {
+      console.error("Error creating notification in Firestore:", error);
+      throw error;
+    }
   }
-  const items = localStore.getNotifications();
-  items.unshift(full);
-  localStore.setNotifications(items);
+
+  // Local store fallback
+  const newNotification: AppNotification = {
+    id: Date.now().toString(),
+    ...payload,
+  };
+  
+  const current = localStore.getNotifications();
+  localStore.setNotifications([newNotification, ...current]);
+  return newNotification.id;
 }
 
 export async function markNotificationRead(notificationId: string): Promise<void> {
@@ -424,150 +378,88 @@ export async function markNotificationRead(notificationId: string): Promise<void
     await updateDoc(doc(db, 'notifications', notificationId), { read: true });
     return;
   }
+
   const items = localStore.getNotifications().map((n) =>
-    n.id === notificationId ? { ...n, read: true } : n,
+    n.id === notificationId ? { ...n, read: true } : n
   );
   localStore.setNotifications(items);
 }
-// ==============================
-// Dashboard Statistics
-// ==============================
 
+// Get All Notifications for Admin
+export async function getAllNotifications(): Promise<AppNotification[]> {
+  if (isFirebaseConfigured && db) {
+    try {
+      const querySnapshot = await getDocs(collection(db, "notifications"));
+      
+      return querySnapshot.docs.map((docSnap) => ({
+        ...(docSnap.data() as AppNotification),
+        id: docSnap.id, // Explicit Firestore ID mapping
+      }));
+    } catch (error) {
+      console.error("Error fetching all notifications from Firestore:", error);
+      throw error;
+    }
+  }
 
-export async function getStudentStatistics(
-studentId:string
-){
-
-const diaries =
-await getDiaries(studentId);
-
-
-const reports =
-await getReports(studentId);
-
-
-
-const hours =
-diaries.reduce(
-(sum,d)=>sum+d.hoursWorked,
-0
-);
-
-
-return {
-
-diaryCount:diaries.length,
-
-reportCount:reports.length,
-
-totalHours:hours,
-
-approvedReports:
-reports.filter(
-r=>r.status==="supervisor_approved"
-).length
-
-};
-
+  // Local store fallback
+  return localStore.getNotifications();
 }
-// ==============================
-// Company Feedback
-// ==============================
 
+// ============================================================================
+// Dashboard Statistics
+// ============================================================================
+
+export async function getStudentStatistics(studentId: string) {
+  const diaries = await getDiaries(studentId);
+  const reports = await getReports(studentId);
+
+  const totalHours = diaries.reduce((sum, d) => sum + d.hoursWorked, 0);
+  const approvedReports = reports.filter((r) => r.status === 'supervisor_approved').length;
+
+  return {
+    diaryCount: diaries.length,
+    reportCount: reports.length,
+    totalHours,
+    approvedReports,
+  };
+}
+
+// ============================================================================
+// Company Feedback Operations
+// ============================================================================
 
 export async function createCompanyFeedback(
-data:Omit<CompanyFeedback,"id"|"createdAt">
-){
+  data: Omit<CompanyFeedback, 'id' | 'createdAt'>
+): Promise<CompanyFeedback> {
+  const feedback: CompanyFeedback = {
+    ...data,
+    id: id(),
+    createdAt: new Date().toISOString(),
+  };
 
-const feedback:CompanyFeedback={
+  if (isFirebaseConfigured && db) {
+    await addDoc(collection(db, 'companyFeedback'), feedback);
+    return feedback;
+  }
 
-...data,
+  const items = localStore.getCompanyFeedback();
+  items.push(feedback);
+  localStore.setCompanyFeedback(items);
 
-id:id(),
-
-createdAt:new Date().toISOString()
-
-};
-
-
-if(isFirebaseConfigured && db){
-
-await addDoc(
-collection(db,"companyFeedback"),
-feedback
-);
-
-return feedback;
-
+  return feedback;
 }
 
+export async function getCompanyFeedback(studentId?: string): Promise<CompanyFeedback[]> {
+  if (isFirebaseConfigured && db) {
+    const snap = await getDocs(collection(db, 'companyFeedback'));
+    let items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as CompanyFeedback));
 
+    if (studentId) {
+      items = items.filter((i) => i.studentId === studentId);
+    }
+    return items;
+  }
 
-const items =
-localStore.getCompanyFeedback();
-
-
-items.push(feedback);
-
-
-localStore.setCompanyFeedback(items);
-
-
-return feedback;
-
-}
-
-
-
-
-export async function getCompanyFeedback(
-studentId?:string
-):Promise<CompanyFeedback[]>{
-
-
-if(isFirebaseConfigured && db){
-
-const snap =
-await getDocs(
-collection(db,"companyFeedback")
-);
-
-
-let items =
-snap.docs.map(
-d=>({
-id:d.id,
-...d.data()
-} as CompanyFeedback)
-);
-
-
-if(studentId){
-
-items =
-items.filter(
-i=>i.studentId===studentId
-);
-
-}
-
-
-return items;
-
-}
-
-
-
-const all =
-localStore.getCompanyFeedback();
-
-
-return studentId
-?
-all.filter(
-f=>f.studentId===studentId
-)
-:
-all;
-
+  const all = localStore.getCompanyFeedback();
+  return studentId ? all.filter((f) => f.studentId === studentId) : all;
 }

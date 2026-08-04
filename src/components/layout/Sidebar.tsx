@@ -62,8 +62,8 @@ export function Sidebar() {
       <div className="sidebar-brand">
         <div className="brand-icon">IMS</div>
         <div>
-          <h1>Smart Internship</h1>
-          <p>Monitoring System</p>
+          <h1>CareerLink</h1>
+          <p>Smart Internship Monitoring System</p>
         </div>
       </div>
 

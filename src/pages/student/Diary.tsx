@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Sparkles,
   Plus,
@@ -12,8 +12,8 @@ import {
 import { format } from "date-fns";
 
 import { useAuth } from "../../contexts/useAuth";
+import { useInternshipData } from "../../contexts/InternshipContext";
 import {
-  getDiaries,
   createDiary,
   deleteDiary,
   updateDiary,
@@ -24,16 +24,20 @@ import type { DiaryEntry } from "../../types";
 
 export function StudentDiaryPage() {
   const { user } = useAuth();
+  
+  // Pull entries and the global refresh trigger from context
+  const { diaries: entries, refreshData } = useInternshipData();
 
-  const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [entryToDelete, setEntryToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [sortType, setSortType] = useState("newest");
+
 
   const [form, setForm] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
@@ -44,28 +48,6 @@ export function StudentDiaryPage() {
     skillsUsed: "",
   });
 
-  // ============================
-  // LOAD DIARIES FROM FIRESTORE
-  // ============================
-  const load = async () => {
-    if (!user) return;
-
-    try {
-      const data = await getDiaries(user.uid);
-      setEntries(data);
-    } catch (error) {
-      console.error("Loading diary failed:", error);
-      setMessage("Unable to load diary entries");
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, [user]);
-
-  // ============================
-  // RESET FORM
-  // ============================
   const resetForm = () => {
     setEditingId(null);
     setForm({
@@ -78,12 +60,13 @@ export function StudentDiaryPage() {
     });
   };
 
-  // ============================
-  // CREATE / UPDATE DIARY
-  // ============================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    
+    if (!user?.uid) {
+      setMessage("Failed: User is not authenticated.");
+      return;
+    }
 
     setLoading(true);
     setMessage("");
@@ -94,53 +77,39 @@ export function StudentDiaryPage() {
         date: form.date,
         title: form.title,
         content: form.content,
-        tasksCompleted: form.tasksCompleted
-          .split("\n")
-          .filter(Boolean),
+        tasksCompleted: form.tasksCompleted.split("\n").filter(Boolean),
         hoursWorked: Number(form.hoursWorked),
-        skillsUsed: form.skillsUsed
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
+        skillsUsed: form.skillsUsed.split(",").map((s) => s.trim()).filter(Boolean),
+        aiEnhanced: false,
+        status: "pending" as const, // <-- Add 'as const' right here
+        createdAt: new Date().toISOString(),
       };
 
       if (editingId) {
         await updateDiary(editingId, payload);
-        setMessage("Diary updated successfully");
+        setMessage("Diary updated successfully!");
       } else {
         await createDiary(payload);
-        setMessage("Diary saved successfully");
+        setMessage("Diary saved successfully!");
       }
 
       resetForm();
-      await load();
-    } catch (error) {
-      console.error("Save diary error:", error);
-      setMessage("Failed to save diary");
+      await refreshData(); // Sync global state
+    } catch (error: any) {
+      console.error("Save diary error details:", error);
+      // Render the specific error message to pinpoint the exact issue immediately
+      setMessage(`Failed to save diary: ${error?.message || "Unknown error"}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // ============================
-  // AI ENHANCE
-  // ============================
   const handleEnhance = async () => {
     if (!form.content) return;
-
     setAiLoading(true);
-
     try {
-      const enhanced = await enhanceDiaryEntry(
-        form.content,
-        form.title || "Diary Entry"
-      );
-
-      setForm((previous) => ({
-        ...previous,
-        content: enhanced,
-      }));
-
+      const enhanced = await enhanceDiaryEntry(form.content, form.title || "Diary Entry");
+      setForm((previous) => ({ ...previous, content: enhanced }));
       setMessage("AI enhancement applied");
     } catch (error) {
       console.error("AI enhance error:", error);
@@ -150,9 +119,6 @@ export function StudentDiaryPage() {
     }
   };
 
-  // ============================
-  // EDIT DIARY
-  // ============================
   const handleEdit = (entry: DiaryEntry) => {
     setEditingId(entry.id);
     setForm({
@@ -163,38 +129,44 @@ export function StudentDiaryPage() {
       hoursWorked: entry.hoursWorked,
       skillsUsed: entry.skillsUsed.join(", "),
     });
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // ============================
-  // DELETE DIARY
-  // ============================
-  const handleDelete = async (id: string) => {
-    const confirmDelete = window.confirm("Delete this diary entry?");
-    if (!confirmDelete) return;
+  // 1. Open the deletion dialog
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); // Prevents opening the view modal
+    setEntryToDelete(id);
+  };
+
+  // NEW FUNCTION: Actually execute the deletion
+  const confirmDelete = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!entryToDelete) return;
 
     try {
-      await deleteDiary(id);
+      await deleteDiary(entryToDelete);
       setMessage("Diary deleted successfully");
 
-      if (selectedEntry?.id === id) {
+      if (selectedEntry?.id === entryToDelete) {
         setSelectedEntry(null);
       }
-
-      await load();
+      
+      setEntryToDelete(null);
+      await refreshData(); // Synchronize global context
     } catch (error) {
       console.error("Delete diary error:", error);
-      setMessage("Failed to delete diary");
+      setMessage("Failed to delete diary from database");
     }
   };
 
-  // ============================
-  // FILTER AND SORT DIARIES
-  // ============================
+  const cancelDelete = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEntryToDelete(null);
+  };
+
   const filteredEntries = useMemo(() => {
     const search = searchTerm.toLowerCase();
     let data = [...entries];
@@ -207,46 +179,26 @@ export function StudentDiaryPage() {
         entry.tasksCompleted.join(" ").toLowerCase().includes(search);
 
       if (!matches) return false;
-
-      if (filterType === "ai") {
-        return Boolean(entry.aiEnhanced);
-      }
-
-      if (filterType === "today") {
-        return entry.date === format(new Date(), "yyyy-MM-dd");
-      }
-
+      if (filterType === "ai") return Boolean(entry.aiEnhanced);
+      if (filterType === "today") return entry.date === format(new Date(), "yyyy-MM-dd");
       return true;
     });
 
     switch (sortType) {
-      case "oldest":
-        data.sort((a, b) => a.date.localeCompare(b.date));
-        break;
-      case "hours":
-        data.sort((a, b) => b.hoursWorked - a.hoursWorked);
-        break;
-      case "title":
-        data.sort((a, b) => a.title.localeCompare(b.title));
-        break;
-      default:
-        data.sort((a, b) => b.date.localeCompare(a.date));
+      case "oldest": data.sort((a, b) => a.date.localeCompare(b.date)); break;
+      case "hours": data.sort((a, b) => b.hoursWorked - a.hoursWorked); break;
+      case "title": data.sort((a, b) => a.title.localeCompare(b.title)); break;
+      default: data.sort((a, b) => b.date.localeCompare(a.date));
     }
 
     return data;
   }, [entries, searchTerm, filterType, sortType]);
 
-  const totalHours = entries.reduce(
-    (sum, entry) => sum + entry.hoursWorked,
-    0
-  );
-
-  const totalSkills = new Set(
-    entries.flatMap((entry) => entry.skillsUsed)
-  ).size;
-
+  const totalHours = entries.reduce((sum, entry) => sum + entry.hoursWorked, 0);
+  const totalSkills = new Set(entries.flatMap((entry) => entry.skillsUsed)).size;
   const aiCount = entries.filter((entry) => entry.aiEnhanced).length;
 
+  
   return (
     <div className="page">
       <PageHeader
@@ -530,10 +482,7 @@ export function StudentDiaryPage() {
                       <button
                         type="button"
                         className="icon-btn danger"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(entry.id);
-                        }}
+                        onClick={(e) => handleDelete(e, entry.id)}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -553,7 +502,101 @@ export function StudentDiaryPage() {
             </div>
           )}
         </Card>
+        {/* DIARY VIEW MODAL */}
+        {selectedEntry && (
+          <div style={modalOverlayStyle}>
+            <div className="card" style={modalContentStyle}>
+              {/* Updated borderBottom to a lighter gray (#e2e8f0) */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem', marginBottom: '1rem' }}>
+                <h2 style={{ margin: 0, color: '#0f172a' }}>{selectedEntry.title}</h2>
+                {/* Updated date color to a standard medium gray */}
+                <span style={{ color: '#64748b', fontWeight: 500 }}>{selectedEntry.date}</span>
+              </div>
+              
+              <div style={{ marginBottom: '1.5rem', color: '#334155' }}>
+                <p><strong>Hours Logged:</strong> {selectedEntry.hoursWorked}h</p>
+                <p><strong>Description:</strong></p>
+                <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{selectedEntry.content}</p>
+                
+                {selectedEntry.tasksCompleted?.length > 0 && (
+                  <>
+                    <p><strong>Tasks Completed:</strong></p>
+                    <ul style={{ paddingLeft: '1.5rem', lineHeight: '1.6' }}>
+                      {selectedEntry.tasksCompleted.map((task, i) => <li key={i}>{task}</li>)}
+                    </ul>
+                  </>
+                )}
+                
+                {selectedEntry.skillsUsed?.length > 0 && (
+                  <p><strong>Skills:</strong> {selectedEntry.skillsUsed.join(', ')}</p>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn btn-outline" onClick={() => setSelectedEntry(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ============================
+              DELETE CONFIRMATION MODAL
+            ============================ */}
+        {entryToDelete && (
+          <div style={modalOverlayStyle} onClick={cancelDelete}>
+            <div 
+              className="card" 
+              style={{ ...modalContentStyle, maxWidth: '400px', textAlign: 'center' }}
+              onClick={(e) => e.stopPropagation()} 
+            >
+              {/* Ensure text is dark */}
+              <h3 style={{ marginTop: 0, color: '#0f172a' }}>Delete Entry</h3>
+              <p style={{ color: '#475569' }}>Are you sure you want to delete this diary entry? This action cannot be undone.</p>
+              
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem' }}>
+                <button 
+                  type="button"  
+                  className="btn btn-primary danger" 
+                  onClick={confirmDelete}
+                >
+                  Yes, Sure
+                </button>
+                <button 
+                  type="button"  
+                  className="btn btn-outline" 
+                  onClick={cancelDelete}
+                >
+                  No, Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </div>  
   );
 }
+
+const modalOverlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  top: 0, left: 0, right: 0, bottom: 0,
+  backgroundColor: 'rgba(0, 0, 0, 0.4)', // Slightly lighter overlay for a light theme
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 9999,
+  padding: '1rem'
+};
+
+const modalContentStyle: React.CSSProperties = {
+  width: '100%',
+  maxWidth: '600px',
+  maxHeight: '85vh',
+  overflowY: 'auto',
+  backgroundColor: '#ffffff', // Changed to white for light UI
+  border: '1px solid #e2e8f0', // Lighter border color
+  color: '#0f172a', // Ensures text is explicitly dark
+  padding: '24px',
+  borderRadius: '12px'
+};

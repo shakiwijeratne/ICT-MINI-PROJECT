@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   BookOpen,
   FileText,
@@ -9,43 +9,24 @@ import {
   Calendar,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/useAuth';
-import { getDiaries, getReports, getInternships, getNotifications } from '../../services/dataService';
+import { useInternshipData } from '../../contexts/InternshipContext';
 import { PageHeader, Card, StatCard, EmptyState } from '../../components/ui';
-import type { DiaryEntry, WeeklyReport, Internship, AppNotification } from '../../types';
 
 export function StudentDashboard() {
   const { user } = useAuth();
-  const [diaries, setDiaries] = useState<DiaryEntry[]>([]);
-  const [reports, setReports] = useState<WeeklyReport[]>([]);
-  const [internship, setInternship] = useState<Internship | null>(null);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  
+  // Connect to the centralized data stream
+  const { diaries, reports, internship, notifications } = useInternshipData();
 
-  useEffect(() => {
-    if (!user) return;
-    Promise.all([
-      getDiaries(user.uid),
-      getReports(user.uid),
-      getInternships({ studentId: user.uid }),
-      getNotifications(user.uid),
-    ]).then(([d, r, i, n]) => {
-      setDiaries(d);
-      setReports(r);
-      setInternship(i[0] ?? null);
-      setNotifications(n.slice(0, 5));
-    });
-    
-  }, [user]);
+  const navigate = useNavigate();
 
   const pendingReports = reports.filter(
-  (r)=>
-r.status === "submitted" ||
-r.status === "company_verified"
+    (r) => r.status === "submitted" || r.status === "company_verified"
   ).length; 
+
   const totalHours = diaries.reduce((sum, d) => sum + d.hoursWorked, 0);
-  // Count diaries enhanced by AI safely
-  const aiEntries = diaries.filter(
-  (d) => Boolean(d.aiEnhanced)
-  ).length;
+  
+  const aiEntries = diaries.filter((d) => Boolean(d.aiEnhanced)).length;
 
   const allSkills = diaries.flatMap((d) => d.skillsUsed);
   const uniqueSkills = [...new Set(allSkills)];
@@ -81,7 +62,6 @@ r.status === "company_verified"
         subtitle="Track your internship progress, submit diaries, and manage weekly reports"
       />
 
-      {/* Top stats */}
       <div className="stats-grid">
         <StatCard label="Diary Entries" value={diaries.length} icon={<BookOpen size={24} />} />
         <StatCard label="Weekly Reports" value={reports.length} icon={<FileText size={24} />} />
@@ -95,47 +75,25 @@ r.status === "company_verified"
         <StatCard label="Skills Learned" value={uniqueSkills.length} icon={<Award size={24} />} />
       </div>
 
-      {/* Internship card */}
       {internship && (
         <Card className="internship-card">
           <h3>Current Internship</h3>
-
           <div className="internship-details">
-            <div>
-              <strong>Company:</strong> {internship.companyName}
-            </div>
-
-            <div>
-              <strong>Period:</strong> {internship.startDate} — {internship.endDate}
-            </div>
-
-            <div>
-              <strong>Status:</strong> {internship.status}
-            </div>
-
-            <div>
-              <strong>Progress:</strong> {internship.progress}%
-            </div>
-
-            <div>
-              <strong>Days Remaining:</strong> {daysRemaining}
-            </div>
+            <div><strong>Company:</strong> {internship.companyName}</div>
+            <div><strong>Period:</strong> {internship.startDate} — {internship.endDate}</div>
+            <div><strong>Status:</strong> {internship.status}</div>
+            <div><strong>Progress:</strong> {internship.progress}%</div>
+            <div><strong>Days Remaining:</strong> {daysRemaining}</div>
           </div>
-
           <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${internship.progress}%` }}
-            />
+            <div className="progress-fill" style={{ width: `${internship.progress}%` }} />
           </div>
-
           <p style={{ marginTop: '10px', fontWeight: 600 }}>
             Internship Completion: {internship.progress}%
           </p>
         </Card>
       )}
 
-      {/* Main content cards */}
       <div className="grid-2">
         <Card>
           <h3>Recent Diary Entries</h3>
@@ -144,7 +102,12 @@ r.status === "company_verified"
           ) : (
             <ul className="item-list">
               {diaries.slice(0, 5).map((d) => (
-                <li key={d.id}>
+                <li 
+                  key={d.id} 
+                  onClick={() => navigate('/student/diary')}
+                  style={{ cursor: 'pointer', transition: 'background 0.2s' }}
+                  className="hover-highlight" // Optional: if you have a hover class
+                >
                   <strong>{d.date}</strong> — {d.title}
                   <span>{d.hoursWorked}h</span>
                 </li>
@@ -176,7 +139,6 @@ r.status === "company_verified"
         </Card>
       </div>
 
-      {/* Extra info cards */}
       <div className="grid-2">
         <Card>
           <h3>Top Skills</h3>
@@ -197,25 +159,10 @@ r.status === "company_verified"
         <Card>
           <h3>Internship Summary</h3>
           <div className="internship-details">
-            <div>
-              <Calendar size={16} />
-              Total Diary Entries: <strong>{diaries.length}</strong>
-            </div>
-
-            <div>
-              <Clock size={16} />
-              Total Hours: <strong>{totalHours}</strong>
-            </div>
-
-            <div>
-              <Sparkles size={16} />
-              AI Enhanced: <strong>{aiEntries}</strong>
-            </div>
-
-            <div>
-              <Award size={16} />
-              Skills Learned: <strong>{uniqueSkills.length}</strong>
-            </div>
+            <div><Calendar size={16} />Total Diary Entries: <strong>{diaries.length}</strong></div>
+            <div><Clock size={16} />Total Hours: <strong>{totalHours}</strong></div>
+            <div><Sparkles size={16} />AI Enhanced: <strong>{aiEntries}</strong></div>
+            <div><Award size={16} />Skills Learned: <strong>{uniqueSkills.length}</strong></div>
           </div>
         </Card>
       </div>

@@ -17,7 +17,7 @@ import {
 import { CompanyDashboard,CompanyVerifyPage,CompanyEvaluationsPage,} from './pages/company/Pages';
 import { AdminDashboard,AdminUsersPage,AdminInternshipsPage,AdminNotificationsPage,AdminSettingsPage,} from './pages/admin/Pages';
 import { SupervisorDiaryReview } from './pages/supervisor/SupervisorDiaryReview';
- 
+import { InternshipProvider } from './contexts/InternshipContext'; 
 
 function RootRedirect() {
   const { user, loading } = useAuth();
@@ -84,7 +84,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        {/* InternshipProvider MUST go inside AuthProvider so it can access the user */}
+        <InternshipProvider>
+          <AppRoutes />
+        </InternshipProvider>
       </AuthProvider>
     </BrowserRouter>
   );

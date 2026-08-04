@@ -1,16 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  GraduationCap,
-  Building2,
-  UserCheck,
-  Shield,
   Eye,
   EyeOff,
 } from 'lucide-react';
 import { registerUser, loginUser } from '../../services/authService';
 import { useAuth } from '../../contexts/useAuth';
-import { isFirebaseConfigured } from '../../services/firebase';
 import type { UserRole } from '../../types';
 
 export function LoginPage() {
@@ -19,7 +14,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { refreshUser, demoLogin } = useAuth();
+  const { refreshUser } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -37,112 +32,76 @@ export function LoginPage() {
     }
   };
 
-  const handleDemo = (role: UserRole) => {
-    demoLogin(role);
-    navigate(`/${role}`);
-  };
-
   return (
     <div className="auth-page">
-      <div className="auth-container">
-        <div className="auth-hero">
-          <GraduationCap size={48} />
-          <h1>Smart Internship Monitoring System</h1>
-          <p>
-            Web-based platform for internship tracking, reporting, evaluation, and progress
-            monitoring - University of Sri Jayewardenepura
-          </p>
-          {!isFirebaseConfigured && (
-            <div className="demo-banner">
-              Demo mode active — use quick login below or register a local account
-            </div>
-          )}
+      <div className="auth-page-wrapper">
+        <div className="auth-top-branding">
+          <h1>CareerLink</h1>
+          <p>Smart Internship Monitoring System</p>
         </div>
 
-        <div className="auth-form-panel">
-          <h2>Sign In</h2>
-          <form onSubmit={handleSubmit}>
-            {error && <div className="alert alert-error">{error}</div>}
-            <label>
-              Email
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@fot.sjp.ac.lk"
-                required
-              />
-            </label>
-            <label>
-  Password
+        <div className="auth-container">
+          <div className="auth-hero auth-illustration-panel">
+            {/* Replace src with your illustration asset path or import */}
+            <img 
+              src= 'src\assets\images\Intern Students.jpeg'
+              alt="Collaboration Illustration" 
+              className="auth-illustration-img" 
+            />
+          </div>
 
-  <div className="password-input-wrapper">
-    <input
-      type={showPassword ? "text" : "password"}
-      value={password}
-      onChange={(e) => setPassword(e.target.value)}
-      placeholder="Enter your password"
-      required
-      minLength={6}
-    />
+          <div className="auth-form-panel">
+            <h2>Welcome!</h2>
+            <form onSubmit={handleSubmit}>
+              {error && <div className="alert alert-error">{error}</div>}
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder=""
+                  required
+                />
+              </label>
+              <label>
+                Password
+                <div className="password-input-wrapper">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                  />
 
-    <button
-      type="button"
-      className="password-toggle-btn"
-      onClick={() => setShowPassword(!showPassword)}
-      aria-label={showPassword ? "Hide password" : "Show password"}
-    >
-      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-    </button>
-  </div>
-</label>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </label>
 
-          <p className="auth-switch">
-            No account? <Link to="/register">Register here</Link>
-          </p>
+              <div className="forgot-password-wrapper" style={{ textAlign: 'right', marginBottom: '8px' }}>
+                <Link to="/forgot-password" style={{ fontSize: '12px', color: '#2588ff', textDecoration: 'none' }}>
+                  Forgot Password?
+                </Link>
+              </div>
 
-      <div className="demo-logins">
-  <p>Quick demo login:</p>
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Signing in...' : 'Sign In'}
+              </button>
+            </form>
 
-  <div className="demo-buttons">
-    <button
-      type="button"
-      className="btn btn-outline"
-      onClick={() => handleDemo('student')}
-    >
-      <GraduationCap size={16} /> Student
-    </button>
-
-    <button
-      type="button"
-      className="btn btn-outline"
-      onClick={() => handleDemo('supervisor')}
-    >
-      <UserCheck size={16} /> Supervisor
-    </button>
-
-    <button
-      type="button"
-      className="btn btn-outline"
-      onClick={() => handleDemo('company')}
-    >
-      <Building2 size={16} /> Company
-    </button>
-
-    <button
-      type="button"
-      className="btn btn-outline"
-      onClick={() => handleDemo('admin')}
-    >
-      <Shield size={16} /> Admin
-    </button>
-  </div>
-</div>
-          
+            <p className="auth-switch">
+              Don't you have an account? <Link to="/register">Register here</Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>
