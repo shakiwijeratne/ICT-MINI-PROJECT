@@ -62,4 +62,4 @@ export const useInternshipData = () => {
   const context = useContext(InternshipContext);
   if (!context) throw new Error("useInternshipData must be used within an InternshipProvider");
   return context;
-};
+}

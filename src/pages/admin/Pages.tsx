@@ -388,27 +388,67 @@ export function AdminNotificationsPage() {
           {notifications.length === 0 ? (
             <EmptyState message="No notifications have been sent yet." />
           ) : (
-            <ul className="item-list">
-              {notifications
-                .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-                .slice(0, 10)
-                .map((notif) => {
-                  // Find the user to show their name instead of UID in the history
-                  const user = users.find(u => u.uid === notif.userId);
-                  const recipientName = user ? user.displayName : notif.userId;
-                  
-                  return (
-                    <li key={notif.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <strong>{notif.title}</strong>
-                        <span className={`role-badge ${notif.type}`}>{notif.type}</span>
-                      </div>
-                      <span>{notif.message}</span>
-                      <small style={{ color: '#888' }}>Sent to: {recipientName}</small>
-                    </li>
-                  );
+            <ul className="item-list" style={{ listStyle: 'none', padding: 0 }}>
+            {notifications
+              .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+              .slice(0, 10)
+              .map((notif) => {
+                const user = users.find((u) => u.uid === notif.userId);
+                const recipientName = user ? user.displayName : notif.userId;
+
+                // Color mapping for the category badge
+                const isError = notif.type === 'error';
+                const badgeBg = isError ? '#fee2e2' : '#e0f2fe';
+                const badgeColor = isError ? '#991b1b' : '#075985';
+
+                return (
+                  <li 
+                    key={notif.id} 
+                    style={{ 
+                      textAlign: 'left', 
+                      padding: '12px 16px', 
+                      marginBottom: '8px', 
+                      border: '1px solid #e5e7eb', 
+                      borderRadius: '8px',
+                      backgroundColor: '#ffffff',
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      gap: '8px' 
+                    }}
+                  >
+                    {/* Header row: Title on left, Badge on right */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ fontSize: '0.95rem', color: '#111827' }}>
+                        {notif.title}
+                      </strong>
+                      <span 
+                        style={{ 
+                          fontSize: '0.7rem', 
+                          fontWeight: 'bold', 
+                          padding: '2px 8px', 
+                          borderRadius: '9999px',
+                          textTransform: 'uppercase',
+                          backgroundColor: badgeBg,
+                          color: badgeColor
+                        }}
+                      >
+                        {notif.type}
+                      </span>
+                    </div>
+
+                    {/* Message body */}
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: '#4b5563', lineHeight: '1.5' }}>
+                      {notif.message}
+                    </p>
+
+                    {/* Footer: Recipient */}
+                    <small style={{ color: '#6b7280', fontSize: '0.775rem' }}>
+                      Sent to: <strong>{recipientName}</strong>
+                    </small>
+                  </li>
+                );
               })}
-            </ul>
+          </ul>
           )}
         </Card>
       </div>

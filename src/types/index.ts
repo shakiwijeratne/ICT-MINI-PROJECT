@@ -162,7 +162,7 @@ export interface AppNotification {
   userId: string;
   title: string;
   message: string;
-  type: 'info' | 'warning' | 'success' | 'reminder';
+  type: 'info' | 'warning' | 'success' | 'reminder'| 'error';
   read: boolean;
   createdAt: string;
   link?: string;
