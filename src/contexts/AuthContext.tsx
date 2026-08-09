@@ -42,9 +42,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Find your logout function and add the removeItem line:
   const logout = async () => {
-    await logoutUser();
-    setUser(null);
+    try {
+      // 🚨 ADD THIS LINE so manual logouts also clear the timer
+      localStorage.removeItem('app_last_active_timestamp'); 
+      
+      await logoutUser();
+      // redirect to login...
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const demoLogin = (role: UserRole) => {

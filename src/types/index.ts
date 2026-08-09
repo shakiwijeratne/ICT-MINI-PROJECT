@@ -12,6 +12,7 @@ export interface UserProfile {
   email: string;
   displayName: string;
   role: UserRole;
+  photoURL?: string;
   companyId?: string;
   companyName?: string;
   supervisorId?: string;
@@ -20,20 +21,17 @@ export interface UserProfile {
   phone?: string;
   createdAt: string;
 }
-//added by me
+
 export interface StudentEvaluation {
   id: string;
   studentId: string;
   studentName: string;
   supervisorId: string;
-
   technicalSkills: number;
   communicationSkills: number;
   teamworkSkills: number;
   problemSolvingSkills: number;
-
   feedback: string;
-
   createdAt: string;
 }
 
@@ -41,9 +39,15 @@ export interface Internship {
   id: string;
   studentId: string;
   studentName: string;
+  
+  // Added missing foreign keys for dynamic routing
+  companyId: string; 
+  supervisorId: string; 
+  
   companyName: string;
   companySupervisor: string;
-  universitySupervisorId: string;
+  universitySupervisorId?: string; // Optional/legacy support if you are transitioning to just supervisorId
+  
   startDate: string;
   endDate: string;
   status: 'active' | 'completed' | 'pending';
@@ -53,36 +57,22 @@ export interface Internship {
 export interface DiaryEntry {
   id: string;
   studentId: string;
-
   date: string;
   title: string;
   content: string;
-
   tasksCompleted: string[];
   hoursWorked: number;
   skillsUsed: string[];
-
   aiEnhanced?: boolean;
   aiGeneratedContent?: string;
-
-  status:
-    | 'pending'
-    | 'approved'
-    | 'rejected';
-
+  status: 'pending' | 'approved' | 'rejected';
   supervisorFeedback?: string;
   reviewedBy?: string;
   reviewedAt?: string;
-
   createdAt: string;
 }
 
 export interface WeeklyReport {
-    attachmentUrl?: string;
-  attachmentName?: string;
-
-  companyVerifiedAt?: string;
-  supervisorApprovedAt?: string;
   id: string;
   studentId: string;
   studentName: string;
@@ -91,10 +81,16 @@ export interface WeeklyReport {
   summary: string;
   diaryIds: string[];
   status: ReportStatus;
+  
+  attachmentUrl?: string;
+  attachmentName?: string;
   companyFeedback?: string;
   supervisorFeedback?: string;
-  generatedAt: string;
+  
+  companyVerifiedAt?: string;
+  supervisorApprovedAt?: string;
   submittedAt?: string;
+  generatedAt: string;
 }
 
 export interface SkillEvaluation {
@@ -108,53 +104,30 @@ export interface SkillEvaluation {
   comments: string;
   createdAt: string;
 }
+
+// Merged the two CompanyFeedback interfaces into one unified structure
 export interface CompanyFeedback {
-
-  id:string;
-
-  studentId:string;
-
-  companyId:string;
-
-  companyName:string;
-
-  attendance:number;
-
-  technicalPerformance:number;
-
-  communication:number;
-
-  teamwork:number;
-
-  comments:string;
-
-  createdAt:string;
+  id: string;
+  studentId: string;
+  companyId: string;
+  companyName: string;
+  
+  // Specific metrics
+  attendance: number;
+  technicalPerformance: number;
+  communication: number;
+  teamwork: number;
+  rating: number; 
+  
+  feedback: string; // Replaces 'comments' to unify the duplicates
+  createdAt: string;
 }
-export interface CompanyFeedback {
 
-id:string;
-
-studentId:string;
-
-companyId:string;
-
-feedback:string;
-
-rating:number;
-
-createdAt:string;
-
-}
 export interface DashboardStats {
-
- total:number;
-
- completed:number;
-
- pending:number;
-
- averageScore:number;
-
+  total: number;
+  completed: number;
+  pending: number;
+  averageScore: number;
 }
 
 export interface AppNotification {
@@ -162,10 +135,24 @@ export interface AppNotification {
   userId: string;
   title: string;
   message: string;
-  type: 'info' | 'warning' | 'success' | 'reminder'| 'error';
+  type: 'info' | 'warning' | 'success' | 'reminder' | 'error';
   read: boolean;
   createdAt: string;
   link?: string;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  contactPhone: string;
+  address?: string;
+  industry: string;
+  contactEmail?: string;
+  website?: string;
+  supervisorName: string;
+  status: 'active' | 'completed' | 'pending';
+  createdAt: string;
+  // Add any other properties your company profile needs
 }
 
 export const TECHNICAL_SKILLS = [

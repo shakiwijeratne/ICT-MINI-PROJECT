@@ -8,6 +8,7 @@ import {
   Calendar,
   Clock,
   BarChart3,
+  Save, // <-- Added Save icon
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -22,10 +23,12 @@ import { enhanceDiaryEntry } from "../../services/geminiService";
 import { PageHeader, Card, EmptyState } from "../../components/ui";
 import type { DiaryEntry } from "../../types";
 
+// <-- 1. Import your custom hook
+import { useFormDraft } from "../../hooks/useFormDraft"; 
+
 export function StudentDiaryPage() {
   const { user } = useAuth();
   
-  // Pull entries and the global refresh trigger from context
   const { diaries: entries, refreshData } = useInternshipData();
 
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
@@ -38,18 +41,29 @@ export function StudentDiaryPage() {
   const [filterType, setFilterType] = useState("all");
   const [sortType, setSortType] = useState("newest");
 
-
-  const [form, setForm] = useState({
+  // <-- 2. Define initial state so the date evaluates cleanly
+  const initialFormState = useMemo(() => ({
     date: format(new Date(), "yyyy-MM-dd"),
     title: "",
     content: "",
     tasksCompleted: "",
     hoursWorked: 8,
     skillsUsed: "",
-  });
+  }), []);
 
+  // <-- 3. Replace useState with useFormDraft
+  const draftKey = user?.uid ? `diary_draft_${user.uid}` : "";
+  const { 
+    formData: form, 
+    setFormData: setForm, 
+    clearDraft, 
+    hasDraft 
+  } = useFormDraft(draftKey, initialFormState);
+
+  // <-- 4. Update resetForm to wipe the draft from local storage
   const resetForm = () => {
     setEditingId(null);
+    clearDraft(); 
     setForm({
       date: format(new Date(), "yyyy-MM-dd"),
       title: "",
@@ -81,7 +95,7 @@ export function StudentDiaryPage() {
         hoursWorked: Number(form.hoursWorked),
         skillsUsed: form.skillsUsed.split(",").map((s) => s.trim()).filter(Boolean),
         aiEnhanced: false,
-        status: "pending" as const, // <-- Add 'as const' right here
+        status: "pending" as const,
         createdAt: new Date().toISOString(),
       };
 
@@ -93,11 +107,10 @@ export function StudentDiaryPage() {
         setMessage("Diary saved successfully!");
       }
 
-      resetForm();
-      await refreshData(); // Sync global state
+      resetForm(); // This now automatically clears the draft
+      await refreshData();
     } catch (error: any) {
       console.error("Save diary error details:", error);
-      // Render the specific error message to pinpoint the exact issue immediately
       setMessage(`Failed to save diary: ${error?.message || "Unknown error"}`);
     } finally {
       setLoading(false);
@@ -109,7 +122,7 @@ export function StudentDiaryPage() {
     setAiLoading(true);
     try {
       const enhanced = await enhanceDiaryEntry(form.content, form.title || "Diary Entry");
-      setForm((previous) => ({ ...previous, content: enhanced }));
+      setForm((previous: any) => ({ ...previous, content: enhanced }));
       setMessage("AI enhancement applied");
     } catch (error) {
       console.error("AI enhance error:", error);
@@ -132,13 +145,11 @@ export function StudentDiaryPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // 1. Open the deletion dialog
   const handleDelete = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // Prevents opening the view modal
+    e.stopPropagation(); 
     setEntryToDelete(id);
   };
 
-  // NEW FUNCTION: Actually execute the deletion
   const confirmDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -154,7 +165,7 @@ export function StudentDiaryPage() {
       }
       
       setEntryToDelete(null);
-      await refreshData(); // Synchronize global context
+      await refreshData(); 
     } catch (error) {
       console.error("Delete diary error:", error);
       setMessage("Failed to delete diary from database");
@@ -198,7 +209,6 @@ export function StudentDiaryPage() {
   const totalSkills = new Set(entries.flatMap((entry) => entry.skillsUsed)).size;
   const aiCount = entries.filter((entry) => entry.aiEnhanced).length;
 
-  
   return (
     <div className="page">
       <PageHeader
@@ -253,7 +263,16 @@ export function StudentDiaryPage() {
             CREATE / UPDATE FORM
         ============================ */}
         <Card>
-          <h3>{editingId ? "Edit Diary Entry" : "New Diary Entry"}</h3>
+          {/* <-- 5. Added Draft Status Indicator to the Header --> */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0 }}>{editingId ? "Edit Diary Entry" : "New Diary Entry"}</h3>
+            
+            {hasDraft && !editingId && (
+              <span style={{ fontSize: '0.85rem', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}>
+                <Save size={14} /> Draft Auto-Saved
+              </span>
+            )}
+          </div>
 
           {message && <div className="alert alert-success">{message}</div>}
 
@@ -263,12 +282,7 @@ export function StudentDiaryPage() {
               <input
                 type="date"
                 value={form.date}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    date: e.target.value,
-                  })
-                }
+                onChange={(e) => setForm({ ...form, date: e.target.value })}
                 required
               />
             </label>
@@ -277,12 +291,7 @@ export function StudentDiaryPage() {
               Title
               <input
                 value={form.title}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    title: e.target.value,
-                  })
-                }
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
                 required
                 placeholder="Database migration task"
               />
@@ -293,12 +302,7 @@ export function StudentDiaryPage() {
               <textarea
                 rows={6}
                 value={form.content}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    content: e.target.value,
-                  })
-                }
+                onChange={(e) => setForm({ ...form, content: e.target.value })}
                 required
                 placeholder="Describe what you did today..."
               />
@@ -309,12 +313,7 @@ export function StudentDiaryPage() {
               <textarea
                 rows={3}
                 value={form.tasksCompleted}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    tasksCompleted: e.target.value,
-                  })
-                }
+                onChange={(e) => setForm({ ...form, tasksCompleted: e.target.value })}
                 placeholder="One task per line"
               />
             </label>
@@ -327,12 +326,7 @@ export function StudentDiaryPage() {
                   min={1}
                   max={12}
                   value={form.hoursWorked}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      hoursWorked: Number(e.target.value),
-                    })
-                  }
+                  onChange={(e) => setForm({ ...form, hoursWorked: Number(e.target.value) })}
                 />
               </label>
 
@@ -340,12 +334,7 @@ export function StudentDiaryPage() {
                 Skills Used
                 <input
                   value={form.skillsUsed}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      skillsUsed: e.target.value,
-                    })
-                  }
+                  onChange={(e) => setForm({ ...form, skillsUsed: e.target.value })}
                   placeholder="React, SQL, Git"
                 />
               </label>
@@ -369,6 +358,17 @@ export function StudentDiaryPage() {
                   onClick={resetForm}
                 >
                   Cancel
+                </button>
+              )}
+
+              {/* Added explicit manual clear draft button if they want to discard unsubmitted data */}
+              {!editingId && hasDraft && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={resetForm}
+                >
+                  Discard Draft
                 </button>
               )}
 
@@ -502,14 +502,13 @@ export function StudentDiaryPage() {
             </div>
           )}
         </Card>
+        
         {/* DIARY VIEW MODAL */}
         {selectedEntry && (
           <div style={modalOverlayStyle}>
             <div className="card" style={modalContentStyle}>
-              {/* Updated borderBottom to a lighter gray (#e2e8f0) */}
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem', marginBottom: '1rem' }}>
                 <h2 style={{ margin: 0, color: '#0f172a' }}>{selectedEntry.title}</h2>
-                {/* Updated date color to a standard medium gray */}
                 <span style={{ color: '#64748b', fontWeight: 500 }}>{selectedEntry.date}</span>
               </div>
               
@@ -540,6 +539,7 @@ export function StudentDiaryPage() {
             </div>
           </div>
         )}
+        
         {/* ============================
               DELETE CONFIRMATION MODAL
             ============================ */}
@@ -550,7 +550,6 @@ export function StudentDiaryPage() {
               style={{ ...modalContentStyle, maxWidth: '400px', textAlign: 'center' }}
               onClick={(e) => e.stopPropagation()} 
             >
-              {/* Ensure text is dark */}
               <h3 style={{ marginTop: 0, color: '#0f172a' }}>Delete Entry</h3>
               <p style={{ color: '#475569' }}>Are you sure you want to delete this diary entry? This action cannot be undone.</p>
               
@@ -581,7 +580,7 @@ export function StudentDiaryPage() {
 const modalOverlayStyle: React.CSSProperties = {
   position: 'fixed',
   top: 0, left: 0, right: 0, bottom: 0,
-  backgroundColor: 'rgba(0, 0, 0, 0.4)', // Slightly lighter overlay for a light theme
+  backgroundColor: 'rgba(0, 0, 0, 0.4)', 
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -594,9 +593,9 @@ const modalContentStyle: React.CSSProperties = {
   maxWidth: '600px',
   maxHeight: '85vh',
   overflowY: 'auto',
-  backgroundColor: '#ffffff', // Changed to white for light UI
-  border: '1px solid #e2e8f0', // Lighter border color
-  color: '#0f172a', // Ensures text is explicitly dark
+  backgroundColor: '#ffffff', 
+  border: '1px solid #e2e8f0', 
+  color: '#0f172a', 
   padding: '24px',
   borderRadius: '12px'
 };

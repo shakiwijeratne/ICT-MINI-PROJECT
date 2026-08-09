@@ -11,13 +11,15 @@ import { StudentProgressPage } from './pages/student/Progress';
 import { SupervisorDashboard } from './pages/supervisor/Dashboard';
 import {
   SupervisorStudentsPage,
-  SupervisorAnalyticsPage,
-  
+  SupervisorAnalyticsPage,  
 } from './pages/supervisor/Pages';
 import { CompanyDashboard,CompanyVerifyPage,CompanyEvaluationsPage,} from './pages/company/Pages';
 import { AdminDashboard,AdminUsersPage,AdminInternshipsPage,AdminNotificationsPage,AdminSettingsPage,} from './pages/admin/Pages';
 import { SupervisorDiaryReview } from './pages/supervisor/SupervisorDiaryReview';
+import { SupervisorEvaluationPage } from './pages/supervisor/evaluation';
 import { InternshipProvider } from './contexts/InternshipContext'; 
+import Profile  from './pages/Profile/Profile';
+import { AdminAssignmentsPage } from './pages/admin/Assignments';
 
 function RootRedirect() {
   const { user, loading } = useAuth();
@@ -39,6 +41,7 @@ function AppRoutes() {
           <Route path="/student/diary" element={<StudentDiaryPage />} />
           <Route path="/student/reports" element={<StudentReportsPage />} />
           <Route path="/student/progress" element={<StudentProgressPage />} />
+          <Route path="/student/profile" element={<Profile />} />
         </Route>
       </Route>
 
@@ -47,10 +50,9 @@ function AppRoutes() {
           <Route path="/supervisor" element={<SupervisorDashboard />} />
           <Route path="/supervisor/students" element={<SupervisorStudentsPage />} />
           <Route path="/supervisor/diary-review" element={<SupervisorDiaryReview />}/>
-           
-
-
           <Route path="/supervisor/analytics" element={<SupervisorAnalyticsPage />} />
+          <Route path="/supervisor/evaluations" element={<SupervisorEvaluationPage />} />
+          <Route path="/supervisor/profile" element={<Profile />}/>
         </Route>
       </Route>
 
@@ -59,6 +61,7 @@ function AppRoutes() {
           <Route path="/company" element={<CompanyDashboard />} />
           <Route path="/company/verify" element={<CompanyVerifyPage />} />
           <Route path="/company/evaluations" element={<CompanyEvaluationsPage />} />
+          <Route path="/company/profile" element={<Profile />} />
         </Route>
       </Route>
 
@@ -69,6 +72,7 @@ function AppRoutes() {
           <Route path="/admin/internships" element={<AdminInternshipsPage />} />
           <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
+          <Route path="/admin/assignments" element={<AdminAssignmentsPage />} />
           <Route path="/supervisor/diary-review"element={<SupervisorDiaryReview/>}/>
         </Route>
       </Route>

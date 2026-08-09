@@ -110,10 +110,10 @@ export function LoginPage() {
 
 export function RegisterPage() {
   const [form, setForm] = useState({
+    role: 'student' as UserRole,
     displayName: '',
     email: '',
     password: '',
-    role: 'student' as UserRole,
     indexNumber: '',
     department: '',
     companyName: '',
@@ -128,7 +128,7 @@ export function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      const user = await registerUser(form.email, form.password, form.displayName, form.role, {
+      const user = await registerUser(form.role, form.email, form.password, form.displayName, {
         indexNumber: form.indexNumber || undefined,
         department: form.department || undefined,
         companyName: form.companyName || undefined,
@@ -151,6 +151,18 @@ export function RegisterPage() {
             {error && <div className="alert alert-error">{error}</div>}
 
             <div className="form-grid">
+              <label>
+                Role
+                <select
+                  value={form.role}
+                  onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
+                >
+                  <option value="student">Student</option>
+                  <option value="supervisor">University Supervisor</option>
+                  <option value="company">Company</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </label>
               <label>
                 Full Name
                 <input
@@ -177,18 +189,6 @@ export function RegisterPage() {
                   minLength={6}
                   required
                 />
-              </label>
-              <label>
-                Role
-                <select
-                  value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
-                >
-                  <option value="student">Student</option>
-                  <option value="supervisor">University Supervisor</option>
-                  <option value="company">Company</option>
-                  <option value="admin">Administrator</option>
-                </select>
               </label>
               {form.role === 'student' && (
                 <>

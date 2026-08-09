@@ -82,12 +82,14 @@ export function CompanyVerifyPage() {
       title: "Report Verified",
       message: `${report.studentName}'s report verified by company — awaiting supervisor approval`,
       type: "info",
+      read: true
     });
     await createNotification({
       userId: report.studentId,
       title: "Report Verified",
       message: `Your weekly report (${report.weekStart}) was verified by the company`,
       type: "success",
+      read: true
     });
     setReports((prev) => prev.filter((r) => r.id !== report.id));
   };
@@ -165,6 +167,7 @@ export function CompanyEvaluationsPage() {
       title: "Skill Evaluation Received",
       message: "Your company supervisor submitted a skill evaluation",
       type: "info",
+      read: true
     });
     setMessage("Evaluation submitted successfully");
   };

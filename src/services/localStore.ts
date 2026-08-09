@@ -1,13 +1,3 @@
-import type {
-  UserProfile,
-  DiaryEntry,
-  WeeklyReport,
-  Internship,
-  SkillEvaluation,
-  AppNotification,
-  CompanyFeedback,
-} from '../types';
-
 const PREFIX = 'ims_';
 
 function read<T>(key: string, fallback: T): T {
@@ -20,359 +10,108 @@ function read<T>(key: string, fallback: T): T {
 }
 
 function write<T>(key: string, value: T): void {
-  localStorage.setItem(
-    PREFIX + key,
-    JSON.stringify(value)
-  );
+  localStorage.setItem(PREFIX + key, JSON.stringify(value));
 }
 
-
 export const localStore = {
+  getUsers: () => read<Record<string, import('../types').UserProfile>>('users', {}),
+  setUsers: (users: Record<string, import('../types').UserProfile>) => write('users', users),
 
-  // ==========================
-  // USERS
-  // ==========================
+  getSession: () => read<string | null>('session', null),
+  setSession: (uid: string | null) => write('session', uid),
 
-  getUsers: () =>
-    read<Record<string, UserProfile>>(
-      'users',
-      {}
-    ),
+  getDiaries: () => read<import('../types').DiaryEntry[]>('diaries', []),
+  setDiaries: (items: import('../types').DiaryEntry[]) => write('diaries', items),
 
-  setUsers: (
-    users: Record<string, UserProfile>
-  ) =>
-    write(
-      'users',
-      users
-    ),
+  getReports: () => read<import('../types').WeeklyReport[]>('reports', []),
+  setReports: (items: import('../types').WeeklyReport[]) => write('reports', items),
 
+  getInternships: () => read<import('../types').Internship[]>('internships', []),
+  setInternships: (items: import('../types').Internship[]) => write('internships', items),
 
-  // ==========================
-  // SESSION
-  // ==========================
+  getEvaluations: () => read<import('../types').SkillEvaluation[]>('evaluations', []),
+  setEvaluations: (items: import('../types').SkillEvaluation[]) => write('evaluations', items),
 
-  getSession: () =>
-    read<string | null>(
-      'session',
-      null
-    ),
+  getNotifications: () => read<import('../types').AppNotification[]>('notifications', []),
+  setNotifications: (items: import('../types').AppNotification[]) => write('notifications', items),
 
-  setSession: (
-    uid:string | null
-  ) =>
-    write(
-      'session',
-      uid
-    ),
+  getCompanies: () => read<import('../types').Company[]>('companies', []),
+  setCompanies: (items: import('../types').Company[]) => write('companies', items),
 
-
-  // ==========================
-  // DIARIES
-  // ==========================
-
-  getDiaries: () =>
-    read<DiaryEntry[]>(
-      'diaries',
-      []
-    ),
-
-  setDiaries: (
-    items:DiaryEntry[]
-  ) =>
-    write(
-      'diaries',
-      items
-    ),
-
-
-
-  // ==========================
-  // REPORTS
-  // ==========================
-
-  getReports: () =>
-    read<WeeklyReport[]>(
-      'reports',
-      []
-    ),
-
-  setReports: (
-    items:WeeklyReport[]
-  ) =>
-    write(
-      'reports',
-      items
-    ),
-
-
-
-  // ==========================
-  // INTERNSHIPS
-  // ==========================
-
-  getInternships: () =>
-    read<Internship[]>(
-      'internships',
-      []
-    ),
-
-  setInternships: (
-    items:Internship[]
-  ) =>
-    write(
-      'internships',
-      items
-    ),
-
-
-
-  // ==========================
-  // EVALUATIONS
-  // ==========================
-
-  getEvaluations: () =>
-    read<SkillEvaluation[]>(
-      'evaluations',
-      []
-    ),
-
-  setEvaluations: (
-    items:SkillEvaluation[]
-  ) =>
-    write(
-      'evaluations',
-      items
-    ),
-
-
-
-  // ==========================
-  // COMPANY FEEDBACK
-  // NEW FEATURE
-  // ==========================
-
-  getCompanyFeedback: () =>
-    read<CompanyFeedback[]>(
-      'companyFeedback',
-      []
-    ),
-
-  setCompanyFeedback: (
-    items:CompanyFeedback[]
-  ) =>
-    write(
-      'companyFeedback',
-      items
-    ),
-
-
-
-  // ==========================
-  // FILE ATTACHMENTS
-  // NEW FEATURE
-  // ==========================
-
-  getFiles: () =>
-    read<any[]>(
-      'files',
-      []
-    ),
-
-  setFiles: (
-    items:any[]
-  ) =>
-    write(
-      'files',
-      items
-    ),
-
-
-
-  // ==========================
-  // NOTIFICATIONS
-  // ==========================
-
-  getNotifications: () =>
-    read<AppNotification[]>(
-      'notifications',
-      []
-    ),
-
-  setNotifications: (
-    items:AppNotification[]
-  ) =>
-    write(
-      'notifications',
-      items
-    ),
-
-
-  getCompanyFeedback: () =>
-  read<import('../types').CompanyFeedback[]>(
-  'companyFeedback',
-  []),
-
-  setCompanyFeedback: 
-  (items: import('../types').CompanyFeedback[]) =>
-  write(
-  'companyFeedback',
-  items
-  ),
-  // ==========================
-  // DEMO DATA
-  // ==========================
+  getCompanyFeedback: () => read<import('../types').CompanyFeedback[]>('companyFeedback', []),
+  setCompanyFeedback: (items: import('../types').CompanyFeedback[]) => write('companyFeedback', items),
 
   seedDemoData: () => {
+    if (localStorage.getItem(PREFIX + 'seeded')) return;
 
-    if (
-      localStorage.getItem(
-        PREFIX + 'seeded'
-      )
-    )
-      return;
-
-
-    const now =
-      new Date()
-      .toISOString();
-
-
-    const users:
-      Record<string, UserProfile> =
-    {
-
-      "demo-student":
-      {
-        uid:"demo-student",
-        email:
-        "student@demo.sjp.ac.lk",
-
-        displayName:
-        "Demo Student",
-
-        role:"student",
-
-        indexNumber:
-        "ICT/23/000",
-
-        department:
-        "ICT",
-
-        createdAt:now
+    const now = new Date().toISOString();
+    const users: Record<string, import('../types').UserProfile> = {
+      'demo-student': {
+        uid: 'demo-student',
+        email: 'student@demo.sjp.ac.lk',
+        displayName: 'Imasha Sayakkara',
+        role: 'student',
+        indexNumber: 'ICT/23/927',
+        department: 'Network Technology',
+        createdAt: now,
       },
-
-
-      "demo-supervisor":
-      {
-        uid:
-        "demo-supervisor",
-
-        email:
-        "supervisor@demo.sjp.ac.lk",
-
-        displayName:
-        "University Supervisor",
-
-        role:
-        "supervisor",
-
-        department:
-        "ICT Department",
-
-        createdAt:now
+      'demo-supervisor': {
+        uid: 'demo-supervisor',
+        email: 'supervisor@demo.sjp.ac.lk',
+        displayName: 'Mr. Akalanka Panapitiya',
+        role: 'supervisor',
+        department: 'ICT Department',
+        createdAt: now,
       },
-
-
-      "demo-company":
-      {
-        uid:
-        "demo-company",
-
-        email:
-        "company@demo.lk",
-
-        displayName:
-        "Company Supervisor",
-
-        role:
-        "company",
-
-        companyName:
-        "Tech Solutions Ltd",
-
-        createdAt:now
+      'demo-company': {
+        uid: 'demo-company',
+        email: 'company@demo.lk',
+        displayName: 'Tech Solutions Ltd',
+        role: 'company',
+        companyName: 'Tech Solutions Ltd',
+        createdAt: now,
       },
-
-
-      "demo-admin":
-      {
-        uid:
-        "demo-admin",
-
-        email:
-        "admin@demo.sjp.ac.lk",
-
-        displayName:
-        "System Administrator",
-
-        role:
-        "admin",
-
-        createdAt:now
-      }
-
+      'demo-admin': {
+        uid: 'demo-admin',
+        email: 'admin@demo.sjp.ac.lk',
+        displayName: 'System Administrator',
+        role: 'admin',
+        createdAt: now,
+      },
     };
 
-
     localStore.setUsers(users);
-
-
-
-    localStore.setInternships([
-
+    localStore.setCompanies([
       {
-
-        id:
-        "int-001",
-
-        studentId:
-        "demo-student",
-
-        studentName:
-        "Demo Student",
-
-        companyName:
-        "Tech Solutions Ltd",
-
-        companySupervisor:
-        "Company Supervisor",
-
-        universitySupervisorId:
-        "demo-supervisor",
-
-        startDate:
-        "2026-06-01",
-
-        endDate:
-        "2026-12-01",
-
-        status:
-        "active",
-
-        progress:
-        50
-      }
-
+        id: 'company-1',
+        name: 'Tech Solutions Ltd',
+        industry: 'Information Technology',
+        address: 'Colombo, Sri Lanka',
+        contactEmail: 'info@techsolutions.lk',
+        contactPhone: '+94 11 234 5678',
+        website: 'https://techsolutions.lk',
+        supervisorName: 'Mr. Kamal Perera',
+        status: 'active',
+        createdAt: now,
+      },
+    ]);
+    localStore.setInternships([
+      {
+        id: 'int-1',
+        studentId: 'demo-student',
+        studentName: 'Imasha Sayakkara',
+        companyName: 'Tech Solutions Ltd',
+        companyId:'company-1',
+        companySupervisor:'Mr. Kamal Perera',
+        supervisorId:'',
+        universitySupervisorId: 'demo-supervisor',
+        startDate: '2026-01-15',
+        endDate: '2026-06-15',
+        status: 'active',
+        progress: 45,
+      },
     ]);
 
-
-
-    localStorage.setItem(
-      PREFIX + "seeded",
-      "true"
-    );
-
-  }
-
+    localStorage.setItem(PREFIX + 'seeded', 'true');
+  },
 };

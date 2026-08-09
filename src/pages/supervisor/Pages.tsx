@@ -1,59 +1,77 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/useAuth';
-import { getInternships, getDiaries, getReports } from '../../services/dataService';
+import {
+   getDiaries, getReports, updateReport, createNotification,getInternships
+  } from '../../services/dataService';
+import { getAllUsers } from '../../services/authService';
 import { PageHeader, Card, EmptyState } from '../../components/ui';
-import type { Internship, DiaryEntry, WeeklyReport } from '../../types';
+import type { WeeklyReport, UserProfile} from '../../types';
+
 
 export function SupervisorStudentsPage() {
   const { user } = useAuth();
-  const [students, setStudents] = useState<
-    (Internship & { diaryCount: number; reportCount: number; lastActivity?: string })[]
-  >([]);
+  const [activeInterns, setActiveInterns] = useState<any[]>([]);
+  const [searchingStudents, setSearchingStudents] = useState<UserProfile[]>([]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !user.uid) return;
+    
     Promise.all([
-      getInternships({ supervisorId: user.uid }),
+      getAllUsers(),
+      getInternships(),
       getDiaries(),
       getReports(),
-    ]).then(([internships, diaries, reports]) => {
-      const list = internships.length
-        ? internships
-        : [{
-            id: 'int-1',
-            studentId: 'demo-student',
-            studentName: 'Imasha Sayakkara',
-            companyName: 'Tech Solutions Ltd',
-            companySupervisor: 'Tech Solutions Ltd',
-            universitySupervisorId: user.uid,
-            startDate: '2026-01-15',
-            endDate: '2026-06-15',
-            status: 'active' as const,
-            progress: 45,
-          }];
+    ]).then(([users, allInternships, diaries, reports]) => {
+      // 1. Get all students assigned to this supervisor
+      const assignedUsers = users.filter(
+        (u) => u.role === 'student' && u.supervisorId === user.uid
+      );
+      const assignedStudentIds = new Set(assignedUsers.map((u) => u.uid));
 
-      setStudents(
-        list.map((i) => {
-          const studentDiaries = diaries.filter((d) => d.studentId === i.studentId);
-          const studentReports = reports.filter((r) => r.studentId === i.studentId);
+      // 2. Filter internships belonging strictly to these assigned students
+      const assignedInternships = allInternships.filter((i) => 
+        assignedStudentIds.has(i.studentId)
+      );
+      const activeStudentIds = new Set(assignedInternships.map((i) => i.studentId));
+
+      // 3. Separate them: Active vs Seeking Placement
+      const active = assignedUsers.filter((s) => activeStudentIds.has(s.uid));
+      const searching = assignedUsers.filter((s) => !activeStudentIds.has(s.uid));
+
+      // 4. Map active interns with their progress and metrics
+      setActiveInterns(
+        active.map((s) => {
+          const internship = assignedInternships.find((i) => i.studentId === s.uid);
+          const studentDiaries = diaries.filter((d) => d.studentId === s.uid);
+          const studentReports = reports.filter((r) => r.studentId === s.uid);
+          const progress = internship?.progress ?? Math.min(100, studentDiaries.length * 10);
+          
           return {
-            ...i,
+            ...s,
+            companyName: internship?.companyName ?? s.companyName ?? 'Assigned Company',
+            status: (s as any).status ?? 'active',
+            progress,
             diaryCount: studentDiaries.length,
             reportCount: studentReports.length,
-            lastActivity: studentDiaries[0]?.date,
+            lastActivity: studentDiaries[0]?.date ?? 'No activity',
           };
-        }),
+        })
       );
+
+      // 5. Save searching students separately
+      setSearchingStudents(searching);
     });
   }, [user]);
 
   return (
     <div className="page">
-      <PageHeader title="Assigned Students" subtitle="View student internship details and activity levels" />
+      <PageHeader title="Assigned Students" subtitle="Manage active placements and students seeking internships" />
 
+      {/* SECTION 1: Active Interns */}
       <Card>
-        {students.length === 0 ? (
-          <EmptyState message="No students assigned" />
+        <h3>Active Interns ({activeInterns.length})</h3>
+        {activeInterns.length === 0 ? (
+          <EmptyState message="No active interns currently placed" />
         ) : (
           <table className="data-table">
             <thead>
@@ -64,13 +82,12 @@ export function SupervisorStudentsPage() {
                 <th>Diaries</th>
                 <th>Reports</th>
                 <th>Last Activity</th>
-                <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {students.map((s) => (
-                <tr key={s.id}>
-                  <td><strong>{s.studentName}</strong></td>
+              {activeInterns.map((s) => (
+                <tr key={s.uid}>
+                  <td><strong>{s.displayName}</strong></td>
                   <td>{s.companyName}</td>
                   <td>
                     <div className="progress-bar small">
@@ -80,14 +97,44 @@ export function SupervisorStudentsPage() {
                   </td>
                   <td>{s.diaryCount}</td>
                   <td>{s.reportCount}</td>
-                  <td>{s.lastActivity ?? 'No activity'}</td>
-                  <td>{s.status}</td>
+                  <td>{s.lastActivity}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </Card>
+
+      {/* SECTION 2: Intern Searching Students */}
+      <div style={{ marginTop: '2rem' }}>
+        <Card >
+          <h3>Students Seeking Internships ({searchingStudents.length})</h3>
+          {searchingStudents.length === 0 ? (
+            <EmptyState message="All assigned students have secured placements" />
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Department</th>
+                  <th>Email</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {searchingStudents.map((s) => (
+                  <tr key={s.uid}>
+                    <td><strong>{s.displayName}</strong></td>
+                    <td>{s.department ?? 'General'}</td>
+                    <td>{s.email}</td>
+                    <td><span className="badge badge-warning">Looking for Placement</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
@@ -98,13 +145,22 @@ export function SupervisorReportsPage() {
   const [feedback, setFeedback] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    getReports().then((all) => {
-      setReports(all.filter((r) => r.status === 'company_verified' || r.status === 'supervisor_approved'));
+    if (!user) return;
+    Promise.all([getAllUsers(), getReports()]).then(([users, allReports]) => {
+      const assignedStudentIds = new Set(
+        users.filter((u) => u.role === 'student' && u.supervisorId === user.uid).map((u) => u.uid)
+      );
+
+      const filtered = allReports.filter((r) => 
+        (assignedStudentIds.size === 0 || assignedStudentIds.has(r.studentId)) &&
+        (r.status === 'company_verified' || r.status === 'supervisor_approved')
+      );
+      setReports(filtered);
     });
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [user]);
 
   const approve = async (report: WeeklyReport) => {
-    const { updateReport, createNotification } = await import('../../services/dataService');
     await updateReport(report.id, {
       status: 'supervisor_approved',
       supervisorFeedback: feedback[report.id] ?? 'Approved — good progress',
@@ -114,12 +170,12 @@ export function SupervisorReportsPage() {
       title: 'Report Approved',
       message: `Your weekly report (${report.weekStart}) was approved by your university supervisor`,
       type: 'success',
+      read: false,
     });
     setReports((prev) => prev.filter((r) => r.id !== report.id));
   };
 
   const reject = async (report: WeeklyReport) => {
-    const { updateReport, createNotification } = await import('../../services/dataService');
     await updateReport(report.id, {
       status: 'rejected',
       supervisorFeedback: feedback[report.id] ?? 'Please revise and resubmit',
@@ -129,6 +185,7 @@ export function SupervisorReportsPage() {
       title: 'Report Rejected',
       message: `Your weekly report (${report.weekStart}) needs revision`,
       type: 'warning',
+      read: false,
     });
     setReports((prev) => prev.filter((r) => r.id !== report.id));
   };
@@ -164,25 +221,38 @@ export function SupervisorReportsPage() {
 }
 
 export function SupervisorAnalyticsPage() {
+  const { user } = useAuth();
   const [data, setData] = useState<{ name: string; progress: number; diaries: number }[]>([]);
 
   useEffect(() => {
-    Promise.all([getInternships(), getDiaries()]).then(([internships, diaries]) => {
-      const list = internships.length ? internships : [{
-        studentName: 'Imasha Sayakkara',
-        studentId: 'demo-student',
-        progress: 45,
-      } as never];
+    if (!user) return;
+    Promise.all([getAllUsers(), getDiaries()]).then(([users, diaries]) => {
+      const assignedStudents = users.filter(
+        (u) => u.role === 'student' && u.supervisorId === user.uid
+      );
+
+      const list = assignedStudents.length ? assignedStudents : [{
+        uid: 'demo-student',
+        displayName: 'Imasha Sayakkara',
+        email: 'imasha@example.com',
+        role: 'student' as const,
+        supervisorId: user.uid,
+        createdAt: new Date().toISOString(),
+      }];
 
       setData(
-        list.map((i: { studentName: string; studentId: string; progress: number }) => ({
-          name: i.studentName.split(' ')[0],
-          progress: i.progress,
-          diaries: diaries.filter((d: DiaryEntry) => d.studentId === i.studentId).length,
-        })),
+        list.map((s) => {
+          const studentDiaries = diaries.filter((d) => d.studentId === s.uid);
+          const progress = (s as any).progress ?? Math.min(100, studentDiaries.length * 10);
+          return {
+            name: (s.displayName ?? 'Student').split(' ')[0],
+            progress,
+            diaries: studentDiaries.length,
+          };
+        })
       );
     });
-  }, []);
+  }, [user]);
 
   return (
     <div className="page">

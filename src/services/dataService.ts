@@ -9,7 +9,8 @@ import {
   deleteDoc,
   orderBy,
 } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from './firebase';
+import { db, auth, isFirebaseConfigured } from './firebase';
+import { updateProfile } from 'firebase/auth';
 import { localStore } from './localStore';
 import type {
   DiaryEntry,
@@ -33,24 +34,27 @@ function id(): string {
 // ============================================================================
 
 // 1. GET DIARIES - MUST map docSnap.id to entry.id
-export async function getDiaries(studentId: string): Promise<DiaryEntry[]> {
+export async function getDiaries(studentId?: string): Promise<DiaryEntry[]> {
+  console.log("The ID passed to getDiaries is:", studentId);
   if (isFirebaseConfigured && db) {
     try {
-      const q = query(collection(db, "diaries"), where("studentId", "==", studentId));
+      // Conditionally build the query: only use 'where' if studentId actually exists
+      const q = studentId 
+        ? query(collection(db, "diaries"), where("studentId", "==", studentId))
+        : collection(db, "diaries");
+
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map((docSnap) => ({
         ...(docSnap.data() as DiaryEntry),
-        id: docSnap.id, // OVERWRITE local id with actual Firestore Document ID
+        id: docSnap.id, 
       }));
     } catch (error) {
       console.error("Error fetching diaries from Firestore:", error);
-      throw error;
+      return [];
     }
   }
-
-  // Fallback to local store if DB is not active
-  return localStore.getDiaries().filter(d => d.studentId === studentId);
+  return [];
 }
 
 export async function createDiary(data: Omit<DiaryEntry, 'id'>): Promise<string> {
@@ -442,9 +446,11 @@ export async function createCompanyFeedback(
     return feedback;
   }
 
-  const items = localStore.getCompanyFeedback();
+  const items = (localStore.getCompanyFeedback ? localStore.getCompanyFeedback() : []) as CompanyFeedback[];
   items.push(feedback);
-  localStore.setCompanyFeedback(items);
+  if (localStore.setCompanyFeedback) {
+    localStore.setCompanyFeedback(items);
+  }
 
   return feedback;
 }
@@ -460,6 +466,23 @@ export async function getCompanyFeedback(studentId?: string): Promise<CompanyFee
     return items;
   }
 
-  const all = localStore.getCompanyFeedback();
-  return studentId ? all.filter((f) => f.studentId === studentId) : all;
+  // Fallback
+  const all = (localStore.getCompanyFeedback ? localStore.getCompanyFeedback() : []) as CompanyFeedback[];
+  // Explicitly type 'f' as CompanyFeedback to resolve the implicit 'any' error
+  return studentId ? all.filter((f: CompanyFeedback) => f.studentId === studentId) : all;
 }
+
+export const updateProfilePhoto = async (userId: string, base64Image: string): Promise<void> => {
+  if (!db) throw new Error("Firestore instance not initialized");
+
+  if (auth?.currentUser) {
+    await updateProfile(auth.currentUser, {
+      photoURL: base64Image
+    });
+  }
+
+  const userDocRef = doc(db, 'users', userId);
+  await updateDoc(userDocRef, {
+    photoURL: base64Image
+  });
+};

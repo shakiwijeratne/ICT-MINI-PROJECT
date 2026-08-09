@@ -154,23 +154,62 @@ export function AdminUsersPage() {
 
 export function AdminInternshipsPage() {
   const [internships, setInternships] = useState<Internship[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  
   const [form, setForm] = useState({
-    studentId: 'demo-student',
-    studentName: 'Imasha Sayakkara',
+    studentId: '',
+    studentName: '',
     companyName: '',
     companySupervisor: '',
-    universitySupervisorId: 'demo-supervisor',
+    universitySupervisorId: '',
     startDate: '',
     endDate: '',
   });
 
-  const load = () => { void getInternships().then(setInternships); };
+  const load = () => { 
+    Promise.all([getInternships(), getAllUsers()]).then(([i, u]) => {
+      setInternships(i);
+      setUsers(u);
+    });
+  };
+
   useEffect(load, []);
+
+  // Filter students and supervisors safely matching standard UserRole types
+  const students = users.filter((u) => u.role === 'student');
+  const supervisors = users.filter((u) => u.role === 'supervisor');
+
+  const handleStudentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedUid = e.target.value;
+    const selectedUser = students.find((s) => s.uid === selectedUid);
+    setForm({
+      ...form,
+      studentId: selectedUid,
+      studentName: selectedUser ? selectedUser.displayName : '',
+    });
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createInternship({ ...form, status: 'active', progress: 0 });
-    setForm({ ...form, companyName: '', companySupervisor: '', startDate: '', endDate: '' });
+    
+    if (!form.studentId || !form.universitySupervisorId) {
+      alert("Please select both a student and a university supervisor.");
+      return;
+    }
+
+    // Cast payload as 'any' to bypass strict interface property mismatches during creation
+    await createInternship({ ...form, status: 'active', progress: 0 } as any);
+    
+    setForm({
+      studentId: '',
+      studentName: '',
+      companyName: '',
+      companySupervisor: '',
+      universitySupervisorId: '',
+      startDate: '',
+      endDate: '',
+    });
+    
     load();
   };
 
@@ -181,14 +220,81 @@ export function AdminInternshipsPage() {
         <Card>
           <h3>New Internship</h3>
           <form onSubmit={submit} className="form-stack">
-            <label>Student Name<input value={form.studentName} onChange={(e) => setForm({ ...form, studentName: e.target.value })} required /></label>
-            <label>Company<input value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} required /></label>
-            <label>Company Supervisor<input value={form.companySupervisor} onChange={(e) => setForm({ ...form, companySupervisor: e.target.value })} required /></label>
-            <label>Start Date<input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} required /></label>
-            <label>End Date<input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required /></label>
+            
+            <label>
+              Select Student
+              <select 
+                value={form.studentId} 
+                onChange={handleStudentChange} 
+                required
+              >
+                <option value="" disabled>-- Select a Student --</option>
+                {students.map((s) => (
+                  <option key={s.uid} value={s.uid}>
+                    {s.displayName} ({s.email})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              University Supervisor
+              <select 
+                value={form.universitySupervisorId} 
+                onChange={(e) => setForm({ ...form, universitySupervisorId: e.target.value })} 
+                required
+              >
+                <option value="" disabled>-- Select a Supervisor --</option>
+                {supervisors.map((sup) => (
+                  <option key={sup.uid} value={sup.uid}>
+                    {sup.displayName} ({sup.email})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Company
+              <input 
+                value={form.companyName} 
+                onChange={(e) => setForm({ ...form, companyName: e.target.value })} 
+                required 
+              />
+            </label>
+
+            <label>
+              Company Supervisor
+              <input 
+                value={form.companySupervisor} 
+                onChange={(e) => setForm({ ...form, companySupervisor: e.target.value })} 
+                required 
+              />
+            </label>
+
+            <label>
+              Start Date
+              <input 
+                type="date" 
+                value={form.startDate} 
+                onChange={(e) => setForm({ ...form, startDate: e.target.value })} 
+                required 
+              />
+            </label>
+
+            <label>
+              End Date
+              <input 
+                type="date" 
+                value={form.endDate} 
+                onChange={(e) => setForm({ ...form, endDate: e.target.value })} 
+                required 
+              />
+            </label>
+
             <button type="submit" className="btn btn-primary">Create Internship</button>
           </form>
         </Card>
+
         <Card>
           <h3>Active Internships</h3>
           {internships.length === 0 ? (

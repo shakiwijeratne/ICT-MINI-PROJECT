@@ -1,4 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
 
 :root {
   --primary: #2588ff;
@@ -1164,4 +1165,50 @@ textarea {
   font-weight: 700;
   color: #0f172a;
   margin-bottom: 16px;
+}
+
+/* Center the modal overlay over the entire screen */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5); /* Dim background */
+  backdrop-filter: blur(4px); /* Optional modern blur effect */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999; /* Ensures it sits on top of everything */
+}
+
+/* Style the popup card itself */
+.modal {
+  background-color: #ffffff;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
+  border: 1px solid #f3f4f6;
+}
+
+.modal h3 {
+  margin-top: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.modal p {
+  color: #4b5563;
+  font-size: 0.95rem;
+  margin: 12px 0 20px 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }

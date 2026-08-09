@@ -23,10 +23,10 @@ function uid(): string {
 }
 
 export async function registerUser(
+  role: UserRole,
   email: string,
   password: string,
   displayName: string,
-  role: UserRole,
   extra: Partial<UserProfile> = {},
 ): Promise<UserProfile> {
   const profile: UserProfile = {
@@ -127,6 +127,16 @@ export async function updateUserProfile(uid: string, data: Partial<UserProfile>)
     users[uid] = { ...users[uid], ...data };
     localStore.setUsers(users);
   }
+}
+
+export async function updateUser(userId: string, data: Partial<UserProfile>): Promise<void> {
+  if (isFirebaseConfigured && db) {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, data);
+  }
+  // Optional: If you are using localStore as a fallback like in dataService.ts
+  // const users = localStore.getUsers();
+  // localStore.setUsers(users.map(u => u.uid === userId ? { ...u, ...data } : u));
 }
 
 export async function deleteUser(uid: string): Promise<void> {

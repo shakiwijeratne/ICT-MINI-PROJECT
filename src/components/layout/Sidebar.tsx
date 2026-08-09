@@ -5,6 +5,7 @@ import {
   FileText,
   BarChart3,
   Users,
+  UserPlus,
   Building2,
   Bell,
   Settings,
@@ -22,7 +23,6 @@ const navItems: Record<UserRole, { to: string; label: string; icon: typeof Layou
     { to: '/student/reports', label: 'Weekly Reports', icon: FileText },
     { to: '/student/progress', label: 'Progress', icon: BarChart3 },
   ],
-    
   company: [
     { to: '/company', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/company/verify', label: 'Verify Reports', icon: ClipboardCheck },
@@ -32,15 +32,17 @@ const navItems: Record<UserRole, { to: string; label: string; icon: typeof Layou
     { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/admin/users', label: 'Users', icon: Users },
     { to: '/admin/internships', label: 'Internships', icon: Building2 },
+    { to: '/admin/assignments', label: 'Assign Students', icon: UserPlus }, // <-- Added here
     { to: '/admin/notifications', label: 'Notifications', icon: Bell },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
   ],
-  supervisor: [{to:'/supervisor',label:'Dashboard',icon:LayoutDashboard},
-  {to:'/supervisor/students',label:'Students',icon:Users},
-  {to:'/supervisor/reports',label:'Reports',icon:ClipboardCheck},
-  {to:'/supervisor/diary-review',label:'Diary Review',icon:BookOpen},
-  {to:'/supervisor/evaluations',label:'Evaluations',icon:Award},
-  {to:'/supervisor/analytics',label:'Analytics',icon:BarChart3},
+  supervisor: [
+    { to: '/supervisor', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/supervisor/students', label: 'Students', icon: Users },
+    { to: '/supervisor/reports', label: 'Reports', icon: ClipboardCheck },
+    { to: '/supervisor/diary-review', label: 'Diary Review', icon: BookOpen },
+    { to: '/supervisor/evaluations', label: 'Evaluations', icon: Award },
+    { to: '/supervisor/analytics', label: 'Analytics', icon: BarChart3 },
   ],
 };
 
@@ -55,6 +57,10 @@ export function Sidebar() {
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  const handleProfileClick = () => {
+    navigate(`/${user.role}/profile`);
   };
 
   return (
@@ -82,13 +88,31 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="user-info">
-          <div className="avatar">{user.displayName.charAt(0)}</div>
+        <div 
+          className="user-info" 
+          onClick={handleProfileClick}
+          style={{ cursor: 'pointer', transition: 'opacity 0.2s' }}
+          onMouseOver={(e) => (e.currentTarget.style.opacity = '0.8')}
+          onMouseOut={(e) => (e.currentTarget.style.opacity = '1')}
+          title="View Profile"
+        >
+          <div className="avatar" style={{ overflow: 'hidden', padding: user.photoURL ? 0 : undefined }}>
+            {user.photoURL ? (
+              <img 
+                src={user.photoURL} 
+                alt={user.displayName} 
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+              />
+            ) : (
+              user.displayName.charAt(0)
+            )}
+          </div>
           <div>
             <strong>{user.displayName}</strong>
             <span className="role-badge">{user.role}</span>
           </div>
         </div>
+        
         <button type="button" className="logout-btn" onClick={handleLogout}>
           <LogOut size={16} />
           Logout
