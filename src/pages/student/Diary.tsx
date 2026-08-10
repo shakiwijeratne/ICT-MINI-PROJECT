@@ -8,10 +8,9 @@ import {
   Calendar,
   Clock,
   BarChart3,
-  Save, // <-- Added Save icon
+  Save,
 } from "lucide-react";
 import { format } from "date-fns";
-
 import { useAuth } from "../../contexts/useAuth";
 import { useInternshipData } from "../../contexts/InternshipContext";
 import {
@@ -23,8 +22,9 @@ import { enhanceDiaryEntry } from "../../services/geminiService";
 import { PageHeader, Card, EmptyState } from "../../components/ui";
 import type { DiaryEntry } from "../../types";
 
-// <-- 1. Import your custom hook
+// custom hook for saving drafts
 import { useFormDraft } from "../../hooks/useFormDraft"; 
+
 
 export function StudentDiaryPage() {
   const { user } = useAuth();
@@ -37,11 +37,11 @@ export function StudentDiaryPage() {
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [sortType, setSortType] = useState("newest");
 
-  // <-- 2. Define initial state so the date evaluates cleanly
   const initialFormState = useMemo(() => ({
     date: format(new Date(), "yyyy-MM-dd"),
     title: "",
@@ -51,7 +51,6 @@ export function StudentDiaryPage() {
     skillsUsed: "",
   }), []);
 
-  // <-- 3. Replace useState with useFormDraft
   const draftKey = user?.uid ? `diary_draft_${user.uid}` : "";
   const { 
     formData: form, 
@@ -60,7 +59,7 @@ export function StudentDiaryPage() {
     hasDraft 
   } = useFormDraft(draftKey, initialFormState);
 
-  // <-- 4. Update resetForm to wipe the draft from local storage
+  // Update resetForm to wipe the draft from local storage
   const resetForm = () => {
     setEditingId(null);
     clearDraft(); 
@@ -107,7 +106,7 @@ export function StudentDiaryPage() {
         setMessage("Diary saved successfully!");
       }
 
-      resetForm(); // This now automatically clears the draft
+      resetForm(); // automatically clears the draft
       await refreshData();
     } catch (error: any) {
       console.error("Save diary error details:", error);
@@ -117,16 +116,24 @@ export function StudentDiaryPage() {
     }
   };
 
-  const handleEnhance = async () => {
-    if (!form.content) return;
+ const handleEnhance = async () => {
+    if (!form.content.trim()) return;
+    
     setAiLoading(true);
+    setMessage(""); // Clear previous alerts
+
     try {
       const enhanced = await enhanceDiaryEntry(form.content, form.title || "Diary Entry");
+      
+      // SUCCESS PATH: Only update form state when we get a real string back
       setForm((previous: any) => ({ ...previous, content: enhanced }));
-      setMessage("AI enhancement applied");
-    } catch (error) {
+      setIsError(false);
+      setMessage("AI enhancement applied successfully!");
+    } catch (error: any) {
+      // FAILURE PATH: form.content is untouched! User's text remains completely safe.
       console.error("AI enhance error:", error);
-      setMessage("AI enhancement failed");
+      setIsError(true);
+      setMessage(`AI Enhancement Failed: Service unavailable`);
     } finally {
       setAiLoading(false);
     }
@@ -259,11 +266,9 @@ export function StudentDiaryPage() {
       </div>
 
       <div className="grid-2">
-        {/* ============================
-            CREATE / UPDATE FORM
-        ============================ */}
+        {/*CREATE / UPDATE FORM*/}
         <Card>
-          {/* <-- 5. Added Draft Status Indicator to the Header --> */}
+          {/* Draft Status Indicator */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h3 style={{ margin: 0 }}>{editingId ? "Edit Diary Entry" : "New Diary Entry"}</h3>
             
@@ -274,7 +279,11 @@ export function StudentDiaryPage() {
             )}
           </div>
 
-          {message && <div className="alert alert-success">{message}</div>}
+          {message && (
+            <div className={`alert ${isError ? "alert-error" : "alert-success"}`}>
+              {message}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="form-stack">
             <label>
@@ -348,7 +357,7 @@ export function StudentDiaryPage() {
                 disabled={aiLoading}
               >
                 <Sparkles size={16} />
-                {aiLoading ? "Enhancing..." : "AI Enhance"}
+                {aiLoading ? "Enhancing..." : "Polish With AI"}
               </button>
 
               {editingId && (
@@ -361,7 +370,7 @@ export function StudentDiaryPage() {
                 </button>
               )}
 
-              {/* Added explicit manual clear draft button if they want to discard unsubmitted data */}
+              {/* Explicit manual clear draft button - to discard unsubmitted data */}
               {!editingId && hasDraft && (
                 <button
                   type="button"
@@ -384,9 +393,7 @@ export function StudentDiaryPage() {
           </form>
         </Card>
 
-        {/* ============================
-            PREVIOUS DIARY ENTRIES
-        ============================ */}
+        {/*PREVIOUS DIARY ENTRIES*/}
         <Card>
           <div
             style={{
@@ -540,9 +547,7 @@ export function StudentDiaryPage() {
           </div>
         )}
         
-        {/* ============================
-              DELETE CONFIRMATION MODAL
-            ============================ */}
+        {/* DELETE CONFIRMATION MODAL*/}
         {entryToDelete && (
           <div style={modalOverlayStyle} onClick={cancelDelete}>
             <div 

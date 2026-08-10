@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 
 const LAST_ACTIVE_KEY = 'app_last_active_timestamp';
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes total
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes total
 const WARNING_WINDOW_MS = 2 * 60 * 1000; // Show warning 2 mins before timeout
 
 interface UseIdleTimerProps {

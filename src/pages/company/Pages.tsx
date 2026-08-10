@@ -15,6 +15,7 @@ import {
   EmptyState,
 } from "../../components/ui";
 import { TECHNICAL_SKILLS, SOFT_SKILLS, type WeeklyReport } from "../../types";
+import { getAllUsers } from "../../services/authService";
 
 export function CompanyDashboard() {
   const [pending, setPending] = useState<WeeklyReport[]>([]);
@@ -63,6 +64,7 @@ export function CompanyDashboard() {
 }
 
 export function CompanyVerifyPage() {
+  const { user } = useAuth();
   const [reports, setReports] = useState<WeeklyReport[]>([]);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
 
@@ -76,22 +78,44 @@ export function CompanyVerifyPage() {
     await updateReport(report.id, {
       status: "company_verified",
       companyFeedback: feedback[report.id] ?? "Activities verified",
+      companyApproval: {
+        supervisorId: user?.uid || 'unknown-id',
+        supervisorName: user?.displayName || 'Company Supervisor',
+        designation: 'Industry Supervisor',
+        timestamp: new Date().toISOString(),
+      }
     });
-    await createNotification({
-      userId: "demo-supervisor",
-      title: "Report Verified",
-      message: `${report.studentName}'s report verified by company — awaiting supervisor approval`,
-      type: "info",
-      read: true
-    });
-    await createNotification({
-      userId: report.studentId,
-      title: "Report Verified",
-      message: `Your weekly report (${report.weekStart}) was verified by the company`,
-      type: "success",
-      read: true
-    });
-    setReports((prev) => prev.filter((r) => r.id !== report.id));
+    try {
+        const allUsers = await getAllUsers();
+        const studentProfile = allUsers.find((u) => u.uid === report.studentId);
+        const targetSupervisorId = studentProfile?.supervisorId;
+
+        // 3. Notify University Supervisor ONLY if one is assigned
+        if (targetSupervisorId) {
+          await createNotification({
+            userId: targetSupervisorId, 
+            title: "Report Verified",
+            message: `${report.studentName}'s report verified by company — awaiting your approval`,
+            type: "info",
+            read: false // Arrives unread
+          });
+        } else {
+          console.warn(`No University Supervisor assigned for student ${report.studentName}. Notification skipped.`);
+        }
+
+        // 4. Always notify the student
+        await createNotification({
+          userId: report.studentId,
+          title: "Report Verified",
+          message: `Your weekly report (${report.weekStart}) was verified by the company`,
+          type: "success",
+          read: false
+        });
+
+        setReports((prev) => prev.filter((r) => r.id !== report.id));
+      } catch (error) {
+        console.error("Failed to send verification notifications:", error);
+      }
   };
 
   return (
@@ -135,7 +159,7 @@ export function CompanyVerifyPage() {
 export function CompanyEvaluationsPage() {
   const { user } = useAuth();
   const [reportId, setReportId] = useState("");
-  const [studentId, setStudentId] = useState("demo-student");
+  const [studentId, setStudentId] = useState("");
   const [technical, setTechnical] = useState<Record<string, number>>(
     Object.fromEntries(TECHNICAL_SKILLS.map((s) => [s, 3])),
   );
@@ -167,7 +191,7 @@ export function CompanyEvaluationsPage() {
       title: "Skill Evaluation Received",
       message: "Your company supervisor submitted a skill evaluation",
       type: "info",
-      read: true
+      read: false
     });
     setMessage("Evaluation submitted successfully");
   };

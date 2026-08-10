@@ -16,6 +16,8 @@ export interface UserProfile {
   companyId?: string;
   companyName?: string;
   supervisorId?: string;
+  designation?: string; //
+  universityName?: string;
   department?: string;
   indexNumber?: string;
   phone?: string;
@@ -39,15 +41,12 @@ export interface Internship {
   id: string;
   studentId: string;
   studentName: string;
-  
-  // Added missing foreign keys for dynamic routing
+  position: string;
   companyId: string; 
   supervisorId: string; 
-  
   companyName: string;
   companySupervisor: string;
   universitySupervisorId?: string; // Optional/legacy support if you are transitioning to just supervisorId
-  
   startDate: string;
   endDate: string;
   status: 'active' | 'completed' | 'pending';
@@ -80,18 +79,32 @@ export interface WeeklyReport {
   weekEnd: string;
   summary: string;
   diaryIds: string[];
+  content?: string; // Optional: The concatenated diary entries
+  generatedAt: string;
+  submittedAt?: string; // Optional: Added when submitted
   status: ReportStatus;
   
-  attachmentUrl?: string;
-  attachmentName?: string;
-  companyFeedback?: string;
-  supervisorFeedback?: string;
+  // The Approval Stamps
+  companyApproval?: {
+    supervisorId: string;
+    supervisorName: string;
+    designation: string;
+    timestamp: string;
+  };
+  uniApproval?: {
+    supervisorId: string;
+    supervisorName: string;
+    designation: string;
+    timestamp: string;
+  };
   
-  companyVerifiedAt?: string;
-  supervisorApprovedAt?: string;
-  submittedAt?: string;
-  generatedAt: string;
+  // Feedback Loop
+  supervisorFeedback?: string; // Optional until feedback is given
+  companyFeedback?: string; // Optional until feedback is given
+  rejectionReason?: string;
+  supervisorApprovedAt?: string; // Added to fix the error in image_513d55.jpg
 }
+
 
 export interface SkillEvaluation {
   id: string;
@@ -105,7 +118,6 @@ export interface SkillEvaluation {
   createdAt: string;
 }
 
-// Merged the two CompanyFeedback interfaces into one unified structure
 export interface CompanyFeedback {
   id: string;
   studentId: string;

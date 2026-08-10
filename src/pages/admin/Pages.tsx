@@ -155,13 +155,17 @@ export function AdminUsersPage() {
 export function AdminInternshipsPage() {
   const [internships, setInternships] = useState<Internship[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [selectedSupervisorUid, setSelectedSupervisorUid] = useState('');
   
   const [form, setForm] = useState({
     studentId: '',
     studentName: '',
     companyName: '',
     companySupervisor: '',
+    companySupervisorEmail: '',
+    companySupervisorDesignation: '',
     universitySupervisorId: '',
+    universitySupervisorName: '',
     startDate: '',
     endDate: '',
   });
@@ -175,9 +179,14 @@ export function AdminInternshipsPage() {
 
   useEffect(load, []);
 
-  // Filter students and supervisors safely matching standard UserRole types
   const students = users.filter((u) => u.role === 'student');
   const supervisors = users.filter((u) => u.role === 'supervisor');
+  const companySupervisors = users.filter((u) => u.role === 'company');
+
+  // Filter registered company supervisors matching the entered company name (if specified)
+  const filteredCompanySupervisors = companySupervisors.filter(
+    (sup) => !form.companyName || (sup.companyName && sup.companyName.toLowerCase().includes(form.companyName.toLowerCase()))
+  );
 
   const handleStudentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedUid = e.target.value;
@@ -189,6 +198,57 @@ export function AdminInternshipsPage() {
     });
   };
 
+  const handleUniversitySupervisorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedUid = e.target.value;
+    const selectedUser = supervisors.find((s) => s.uid === selectedUid);
+    setForm({
+      ...form,
+      universitySupervisorId: selectedUid,
+      universitySupervisorName: selectedUser ? selectedUser.displayName : '',
+    });
+  };
+
+  const handleCompanySupervisorSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const uid = e.target.value;
+    setSelectedSupervisorUid(uid);
+    
+    if (!uid) {
+      // Allow manual entry clearing if default option chosen
+      return;
+    }
+
+    const sup = companySupervisors.find((s) => s.uid === uid);
+    if (sup) {
+      setForm({
+        ...form,
+        companyName: sup.companyName || form.companyName,
+        companySupervisor: sup.displayName,
+        companySupervisorEmail: sup.email,
+        companySupervisorDesignation: sup.designation || '',
+      });
+    }
+  };
+
+  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const startVal = e.target.value;
+    let calculatedEndDate = form.endDate;
+
+    if (startVal) {
+      const startDateObj = new Date(startVal);
+      if (!isNaN(startDateObj.getTime())) {
+        // Automatically set end date 6 months ahead (standard internship duration cycle)
+        startDateObj.setMonth(startDateObj.getMonth() + 6);
+        calculatedEndDate = startDateObj.toISOString().split('T')[0];
+      }
+    }
+
+    setForm({
+      ...form,
+      startDate: startVal,
+      endDate: calculatedEndDate,
+    });
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -197,7 +257,6 @@ export function AdminInternshipsPage() {
       return;
     }
 
-    // Cast payload as 'any' to bypass strict interface property mismatches during creation
     await createInternship({ ...form, status: 'active', progress: 0 } as any);
     
     setForm({
@@ -205,11 +264,14 @@ export function AdminInternshipsPage() {
       studentName: '',
       companyName: '',
       companySupervisor: '',
+      companySupervisorEmail: '',
+      companySupervisorDesignation: '',
       universitySupervisorId: '',
+      universitySupervisorName: '',
       startDate: '',
       endDate: '',
     });
-    
+    setSelectedSupervisorUid('');
     load();
   };
 
@@ -241,7 +303,7 @@ export function AdminInternshipsPage() {
               University Supervisor
               <select 
                 value={form.universitySupervisorId} 
-                onChange={(e) => setForm({ ...form, universitySupervisorId: e.target.value })} 
+                onChange={handleUniversitySupervisorChange} 
                 required
               >
                 <option value="" disabled>-- Select a Supervisor --</option>
@@ -254,42 +316,84 @@ export function AdminInternshipsPage() {
             </label>
 
             <label>
-              Company
+              Company Name
               <input 
                 value={form.companyName} 
                 onChange={(e) => setForm({ ...form, companyName: e.target.value })} 
+                placeholder="Enter company name"
                 required 
               />
             </label>
 
             <label>
-              Company Supervisor
+              Company Supervisor Selection (Optional: Select Registered or Enter Manually)
+              <select 
+                value={selectedSupervisorUid} 
+                onChange={handleCompanySupervisorSelect}
+              >
+                <option value="">-- Manual Entry / None Registered --</option>
+                {filteredCompanySupervisors.map((csup) => (
+                  <option key={csup.uid} value={csup.uid}>
+                    {csup.displayName} ({csup.companyName || 'Independent'}) - {csup.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Company Supervisor Name
               <input 
                 value={form.companySupervisor} 
                 onChange={(e) => setForm({ ...form, companySupervisor: e.target.value })} 
+                placeholder="Full Name"
                 required 
               />
             </label>
 
-            <label>
-              Start Date
-              <input 
-                type="date" 
-                value={form.startDate} 
-                onChange={(e) => setForm({ ...form, startDate: e.target.value })} 
-                required 
-              />
-            </label>
+            <div className="form-grid">
+              <label>
+                Supervisor Email
+                <input 
+                  type="email"
+                  value={form.companySupervisorEmail} 
+                  onChange={(e) => setForm({ ...form, companySupervisorEmail: e.target.value })} 
+                  placeholder="name@company.com"
+                  required 
+                />
+              </label>
 
-            <label>
-              End Date
-              <input 
-                type="date" 
-                value={form.endDate} 
-                onChange={(e) => setForm({ ...form, endDate: e.target.value })} 
-                required 
-              />
-            </label>
+              <label>
+                Designation
+                <input 
+                  value={form.companySupervisorDesignation} 
+                  onChange={(e) => setForm({ ...form, companySupervisorDesignation: e.target.value })} 
+                  placeholder="e.g., Tech Lead"
+                  required 
+                />
+              </label>
+            </div>
+
+            <div className="form-grid">
+              <label>
+                Start Date
+                <input 
+                  type="date" 
+                  value={form.startDate} 
+                  onChange={handleStartDateChange} 
+                  required 
+                />
+              </label>
+
+              <label>
+                End Date (Auto-calculated 6 mos / Editable)
+                <input 
+                  type="date" 
+                  value={form.endDate} 
+                  onChange={(e) => setForm({ ...form, endDate: e.target.value })} 
+                  required 
+                />
+              </label>
+            </div>
 
             <button type="submit" className="btn btn-primary">Create Internship</button>
           </form>
@@ -314,7 +418,6 @@ export function AdminInternshipsPage() {
     </div>
   );
 }
-
 
 export function AdminNotificationsPage() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);

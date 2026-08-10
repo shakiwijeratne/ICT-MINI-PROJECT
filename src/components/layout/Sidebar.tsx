@@ -32,7 +32,7 @@ const navItems: Record<UserRole, { to: string; label: string; icon: typeof Layou
     { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/admin/users', label: 'Users', icon: Users },
     { to: '/admin/internships', label: 'Internships', icon: Building2 },
-    { to: '/admin/assignments', label: 'Assign Students', icon: UserPlus }, // <-- Added here
+    { to: '/admin/assignments', label: 'Assign Students', icon: UserPlus },
     { to: '/admin/notifications', label: 'Notifications', icon: Bell },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
   ],

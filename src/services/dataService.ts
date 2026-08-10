@@ -194,7 +194,10 @@ export async function createReport(
   return full;
 }
 
-export async function updateReport(reportId: string, data: Partial<WeeklyReport>): Promise<void> {
+export async function updateReport(
+  reportId: string, 
+  data: Partial<WeeklyReport> & Record<string, any>
+): Promise<void> {
   if (isFirebaseConfigured && db) {
     await updateDoc(doc(db, 'reports', reportId), data);
     return;
@@ -219,7 +222,7 @@ export async function verifyReportByCompany(reportId: string, feedback: string):
   await updateReport(reportId, {
     status: 'company_verified',
     companyFeedback: feedback,
-    companyVerifiedAt: new Date().toISOString(),
+    'companyApproval.timestamp': new Date().toISOString(),
   });
 }
 
@@ -227,7 +230,7 @@ export async function approveReportBySupervisor(reportId: string, feedback: stri
   await updateReport(reportId, {
     status: 'supervisor_approved',
     supervisorFeedback: feedback,
-    supervisorApprovedAt: new Date().toISOString(),
+    'supervisorApproval.timestamp': new Date().toISOString(),
   });
 }
 

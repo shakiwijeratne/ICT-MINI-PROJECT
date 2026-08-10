@@ -1,85 +1,99 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  User as UserIcon, 
-  Settings, 
-  Mail, 
-  Hash, 
-  Building2, 
-  Camera, 
-  Bell, 
-  Moon 
-} from 'lucide-react';
-
-// --- Adjust these import paths to match your project structure ---
-import { auth, db } from '../../services/firebase'; 
-import { doc, getDoc } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../../contexts/useAuth';
+import { db } from '../../services/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { updateProfilePhoto } from '../../services/dataService'; 
+import { 
+  User, 
+  Mail, 
+  Phone, 
+  Building2, 
+  UserCheck, 
+  GraduationCap, 
+  Calendar, 
+  IdCard, 
+  Edit2, 
+  Check, 
+  ArrowLeft, 
+  Trash2,
+  ShieldAlert,
+  X,
+  Camera
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-const Profile = () => {
-  const [userData, setUserData] = useState({
-    name: 'Loading...',
-    role: 'Loading...',
-    email: 'Loading...',
-    indexNumber: 'Loading...',
-    department: 'Loading...',
-    photoURL: ''
-  });
-  
-  const [emailNotifications, setEmailNotifications] = useState(true);
+export function ProfilePage() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- 1. Fetch User Data from Firestore ---
-  useEffect(() => {
-    // Listen for Firebase authentication state
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        try {
-          // Reference the specific user's document in Firestore
-          const userDocRef = doc(db, 'users', currentUser.uid);
-          const userDocSnap = await getDoc(userDocRef);
+  // Core visual data state
+  const [profileData, setProfileData] = useState({
+    displayName: user?.displayName || '',
+    role: user?.role || 'student',
+    email: user?.email || '',
+    phone: '',
+    studentId: '',
+    department: '',
+    company: '',
+    companySupervisor: '',
+    universitySupervisor: '',
+    internshipPeriod: '',
+    photoURL: user?.photoURL || ''
+  });
 
-          if (userDocSnap.exists()) {
-            const data = userDocSnap.data();
-            setUserData({
-              name: data.name || currentUser.displayName || 'Unknown User',
-              role: data.role || 'Student',
-              email: data.email || currentUser.email || 'No email provided',
-              indexNumber: data.indexNumber || 'Not specified',
-              department: data.department || 'Not specified',
-              photoURL: data.photoURL || currentUser.photoURL || ''
-            });
-          } else {
-            console.warn("User document does not exist in Firestore!");
-            // Fallback to auth object data if Firestore doc is missing
-            setUserData(prev => ({
-              ...prev,
-              name: currentUser.displayName || 'Unknown User',
-              email: currentUser.email || 'No email provided',
-            }));
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-        } finally {
-          setIsLoading(false);
+  // Mutable state for the edit form
+  const [formData, setFormData] = useState({ ...profileData });
+
+  // 1. Fetch comprehensive user data from Firestore
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchUserData = async () => {
+      try {
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          const data = userDocSnap.data();
+          
+          const loadedData = {
+            displayName: data.name || data.displayName || user.displayName || 'Unknown User',
+            role: data.role || user.role || 'student',
+            email: data.email || user.email || 'No email provided',
+            phone: data.phone || '',
+            studentId: data.indexNumber || data.studentId || 'Not specified',
+            department: data.department || 'Not specified',
+            company: data.company || 'Not Assigned',
+            companySupervisor: data.companySupervisor || 'Not Assigned',
+            universitySupervisor: data.universitySupervisor || 'Not Assigned',
+            internshipPeriod: data.internshipPeriod || 'Not specified',
+            photoURL: data.photoURL || user.photoURL || ''
+          };
+          
+          setProfileData(loadedData);
+          setFormData(loadedData);
         }
-      } else {
-        // Handle logged out state (e.g., redirect to login)
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      } finally {
         setIsLoading(false);
       }
-    });
+    };
 
-    // Cleanup subscription on unmount
-    return () => unsubscribe();
-  }, []);
+    fetchUserData();
+  }, [user]);
 
-  // --- 2. Handle Profile Photo Upload ---
+  // 2. Handle Image Upload directly to Firebase Storage
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !auth.currentUser) return;
+    if (!file || !user) return;
 
     setIsUploading(true);
     const reader = new FileReader();
@@ -87,12 +101,10 @@ const Profile = () => {
     reader.onloadend = async () => {
       try {
         const base64String = reader.result as string;
+        await updateProfilePhoto(user.uid, base64String);
         
-        // Call the function from your dataService.ts
-        await updateProfilePhoto(auth.currentUser!.uid, base64String);
-        
-        // Update local state to reflect the new image instantly
-        setUserData(prev => ({ ...prev, photoURL: base64String }));
+        // Instantly update the UI
+        setProfileData(prev => ({ ...prev, photoURL: base64String }));
       } catch (error) {
         console.error("Error updating profile photo:", error);
         alert("Failed to upload photo. Please try again.");
@@ -101,138 +113,471 @@ const Profile = () => {
       }
     };
 
-    reader.readAsDataURL(file); // Convert file to Base64
+    reader.readAsDataURL(file); 
   };
 
-  return (
-    <div className="max-w-4xl w-full mx-auto p-6 lg:p-8 space-y-6 text-slate-800">
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // 3. Save modified fields back to Firestore
+  const handleSave = async () => {
+    if (!user) return;
+    
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
       
-      {/* --- Profile Header Card --- */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8 flex flex-col md:flex-row items-center gap-6">
-        <div className="relative group flex-shrink-0">
-          <div className="w-28 h-28 bg-slate-50 rounded-full flex items-center justify-center border-4 border-white shadow-md overflow-hidden">
-            {userData.photoURL ? (
-              <img 
-                src={userData.photoURL} 
-                alt="Profile" 
-                className="w-full h-full object-cover"
+      // Update specific document fields
+      await updateDoc(userDocRef, {
+        name: formData.displayName, 
+        phone: formData.phone,
+        indexNumber: formData.studentId, 
+        company: formData.company,
+        companySupervisor: formData.companySupervisor,
+        universitySupervisor: formData.universitySupervisor,
+        internshipPeriod: formData.internshipPeriod,
+      });
+
+      // Sync the visual profile data with the newly saved form data
+      setProfileData(formData);
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Error saving profile:", error);
+      alert("Failed to save changes.");
+    }
+  };
+
+  const confirmDelete = async () => {
+    await logout();
+    navigate('/login');
+  };
+
+  if (!user) return null;
+
+  return (
+    <div style={{ padding: '24px 32px 32px 32px', maxWidth: '1080px', margin: '0 auto', fontFamily: 'inherit', color: '#1f2937' }}>
+      
+      <button
+        type="button"
+        onClick={() => navigate(-1)}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          border: 'none',
+          background: 'none',
+          cursor: 'pointer',
+          marginBottom: '16px',
+          color: '#4b5563',
+          fontWeight: 600,
+          fontSize: '14px',
+        }}
+      >
+        <ArrowLeft size={18} /> Back to Dashboard
+      </button>
+
+      <div
+        style={{
+          backgroundColor: '#ffffff',
+          borderRadius: '16px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+          overflow: 'hidden',
+          marginBottom: '24px',
+        }}
+      >
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #2563eb 0%, #1e40af 100%)',
+            padding: '32px 40px',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+            
+            {/* Interactive Avatar Container */}
+            <div style={{ position: 'relative' }}>
+              <div
+                onClick={() => !isLoading && !isUploading && fileInputRef.current?.click()}
+                style={{
+                  width: '84px',
+                  height: '84px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ffffff',
+                  color: '#1d4ed8',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '36px',
+                  fontWeight: 700,
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
+                  overflow: 'hidden',
+                  cursor: (isLoading || isUploading) ? 'default' : 'pointer',
+                  opacity: isUploading ? 0.6 : 1
+                }}
+              >
+                {profileData.photoURL ? (
+                  <img 
+                    src={profileData.photoURL} 
+                    alt="Profile" 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  profileData.displayName ? profileData.displayName.charAt(0).toUpperCase() : 'U'
+                )}
+              </div>
+              
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                onChange={handleImageUpload}
+                accept="image/*"
+                style={{ display: 'none' }}
               />
+
+              <div 
+                onClick={() => !isLoading && !isUploading && fileInputRef.current?.click()}
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: '-4px',
+                  backgroundColor: isUploading ? '#94a3b8' : '#2563eb',
+                  color: 'white',
+                  padding: '6px',
+                  borderRadius: '50%',
+                  cursor: (isLoading || isUploading) ? 'default' : 'pointer',
+                  boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <Camera size={14} />
+              </div>
+            </div>
+
+            <div>
+              <h1 style={{ margin: 0, fontSize: '26px', fontWeight: 700, color: '#ffffff', textTransform: 'capitalize' }}>
+                {isLoading ? 'Loading...' : profileData.displayName}
+              </h1>
+              <span
+                style={{
+                  display: 'inline-block',
+                  marginTop: '8px',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  color: '#ffffff',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                  backdropFilter: 'blur(4px)',
+                }}
+              >
+                {isLoading ? '...' : profileData.role}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            {isEditing ? (
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(profileData); // Revert changes
+                    setIsEditing(false);
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255, 255, 255, 0.4)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <X size={16} /> Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    backgroundColor: '#ffffff',
+                    color: '#1e40af',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                  }}
+                >
+                  <Check size={16} /> Save Changes
+                </button>
+              </div>
             ) : (
-              <UserIcon size={48} className="text-slate-300" />
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#ffffff',
+                  color: '#1e40af',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                }}
+              >
+                <Edit2 size={16} /> Edit Profile
+              </button>
             )}
           </div>
+        </div>
+
+        <div style={{ padding: '32px 40px' }}>
           
-          {/* Hidden file input */}
-          <input 
-            type="file" 
-            ref={fileInputRef}
-            onChange={handleImageUpload}
-            accept="image/*"
-            className="hidden"
-          />
-          
-          {/* Upload Button */}
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading || isLoading}
-            className={`absolute bottom-0 right-0 p-2 rounded-full text-white shadow-lg transition-colors cursor-pointer ${isUploading ? 'bg-slate-400' : 'bg-blue-600 hover:bg-blue-700'}`}
+          <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#111827', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <User size={18} color="#2563eb" /> Personal Details
+          </h2>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '32px' }}>
+            <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <User size={16} color="#64748b" />
+              <span style={{ fontWeight: 600, color: '#64748b', fontSize: '14px', minWidth: '160px' }}>Full Name :</span>
+              {isEditing ? (
+                <input type="text" name="displayName" value={formData.displayName} onChange={handleChange} style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+              ) : (
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{isLoading ? '...' : profileData.displayName}</span>
+              )}
+            </div>
+
+            <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <IdCard size={16} color="#64748b" />
+              <span style={{ fontWeight: 600, color: '#64748b', fontSize: '14px', minWidth: '160px' }}>Student ID :</span>
+              {isEditing ? (
+                <input type="text" name="studentId" value={formData.studentId} onChange={handleChange} style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+              ) : (
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{isLoading ? '...' : profileData.studentId}</span>
+              )}
+            </div>
+
+            <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Mail size={16} color="#64748b" />
+              <span style={{ fontWeight: 600, color: '#64748b', fontSize: '14px', minWidth: '160px' }}>Email Address :</span>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#475569' }}>{isLoading ? '...' : profileData.email}</span>
+            </div>
+
+            <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Phone size={16} color="#64748b" />
+              <span style={{ fontWeight: 600, color: '#64748b', fontSize: '14px', minWidth: '160px' }}>Phone Number :</span>
+              {isEditing ? (
+                <input type="text" name="phone" value={formData.phone} onChange={handleChange} placeholder="+94 7X XXX XXXX" style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+              ) : (
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{isLoading ? '...' : (profileData.phone || 'Not provided')}</span>
+              )}
+            </div>
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid #f3f4f6', margin: '24px 0' }} />
+
+          <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#111827', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Building2 size={18} color="#2563eb" /> Internship Details
+          </h2>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+            <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Building2 size={16} color="#64748b" />
+              <span style={{ fontWeight: 600, color: '#64748b', fontSize: '14px', minWidth: '160px' }}>Assigned Company :</span>
+              {isEditing ? (
+                <input type="text" name="company" value={formData.company} onChange={handleChange} style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+              ) : (
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{isLoading ? '...' : profileData.company}</span>
+              )}
+            </div>
+
+            <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Calendar size={16} color="#64748b" />
+              <span style={{ fontWeight: 600, color: '#64748b', fontSize: '14px', minWidth: '160px' }}>Internship Period :</span>
+              {isEditing ? (
+                <input type="text" name="internshipPeriod" value={formData.internshipPeriod} onChange={handleChange} style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+              ) : (
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{isLoading ? '...' : profileData.internshipPeriod}</span>
+              )}
+            </div>
+
+            <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <UserCheck size={16} color="#64748b" />
+              <span style={{ fontWeight: 600, color: '#64748b', fontSize: '14px', minWidth: '160px' }}>Company Supervisor :</span>
+              {isEditing ? (
+                <input type="text" name="companySupervisor" value={formData.companySupervisor} onChange={handleChange} style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+              ) : (
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{isLoading ? '...' : profileData.companySupervisor}</span>
+              )}
+            </div>
+
+            <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <GraduationCap size={16} color="#64748b" />
+              <span style={{ fontWeight: 600, color: '#64748b', fontSize: '14px', minWidth: '160px' }}>University Supervisor :</span>
+              {isEditing ? (
+                <input type="text" name="universitySupervisor" value={formData.universitySupervisor} onChange={handleChange} style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+              ) : (
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{isLoading ? '...' : profileData.universitySupervisor}</span>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div
+        style={{
+          padding: '20px 24px',
+          borderRadius: '16px',
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fee2e2',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <ShieldAlert size={22} color="#dc2626" />
+          <div>
+            <h4 style={{ margin: 0, color: '#991b1b', fontSize: '14px', fontWeight: 600 }}>Delete Account</h4>
+            <p style={{ margin: 0, color: '#b91c1c', fontSize: '12px', marginTop: '2px' }}>
+              Once deleted, your account cannot be recovered.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowDeleteModal(true)}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: 'none',
+            backgroundColor: '#dc2626',
+            color: '#ffffff',
+            fontWeight: 600,
+            fontSize: '13px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <Trash2 size={15} /> Delete Account
+        </button>
+      </div>
+
+      {showDeleteModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            backdropFilter: 'blur(3px)',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '28px',
+              maxWidth: '400px',
+              width: '90%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              textAlign: 'center',
+            }}
           >
-            <Camera size={16} />
-          </button>
-        </div>
-        
-        <div className="text-center md:text-left flex-1">
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-            {isLoading ? '...' : userData.name}
-          </h1>
-          <p className="text-blue-600 font-semibold uppercase tracking-widest text-xs mt-1.5">
-            {isLoading ? '...' : userData.role}
-          </p>
-        </div>
-      </div>
-
-      {/* --- General Settings Card --- */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
-        <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-          <Settings size={20} className="text-slate-500" />
-          General Settings
-        </h2>
-        
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                <Bell size={18} />
-              </div>
-              <span className="font-medium text-slate-700">Email Notifications</span>
+            <div
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                backgroundColor: '#fef2f2',
+                color: '#dc2626',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px auto',
+              }}
+            >
+              <ShieldAlert size={24} />
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer" 
-                checked={emailNotifications}
-                onChange={() => setEmailNotifications(!emailNotifications)}
-              />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
-          </div>
-
-          <div className="flex items-center justify-between opacity-60">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-slate-100 text-slate-500 rounded-lg">
-                <Moon size={18} />
-              </div>
-              <div>
-                <span className="font-medium text-slate-700 block">Dark Mode</span>
-                <span className="text-xs text-slate-500">Coming Soon</span>
-              </div>
-            </div>
-            <label className="relative inline-flex items-center cursor-not-allowed">
-              <input type="checkbox" className="sr-only peer" disabled />
-              <div className="w-11 h-6 bg-slate-200 rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5"></div>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {/* --- Personal Information Card --- */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
-        <h2 className="text-lg font-bold text-slate-900 mb-6 border-b border-slate-100 pb-4">
-          Personal Information
-        </h2>
-        
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 items-center">
-            <div className="text-slate-500 flex items-center gap-2 font-medium text-sm">
-              <Mail size={16} /> Email Address
-            </div>
-            <div className="md:col-span-2 font-medium text-slate-900 bg-slate-50 p-3 rounded-lg border border-slate-100 break-all">
-              {isLoading ? '...' : userData.email}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 items-center">
-            <div className="text-slate-500 flex items-center gap-2 font-medium text-sm">
-              <Hash size={16} /> Index Number
-            </div>
-            <div className="md:col-span-2 font-medium text-slate-900 bg-slate-50 p-3 rounded-lg border border-slate-100">
-              {isLoading ? '...' : userData.indexNumber}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 items-center">
-            <div className="text-slate-500 flex items-center gap-2 font-medium text-sm">
-              <Building2 size={16} /> Department
-            </div>
-            <div className="md:col-span-2 font-medium text-slate-900 bg-slate-50 p-3 rounded-lg border border-slate-100">
-              {isLoading ? '...' : userData.department}
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 700, color: '#111827' }}>
+              Delete Account
+            </h3>
+            <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: '#6b7280', lineHeight: '1.5' }}>
+              Are you sure you want to delete your account? This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #d1d5db',
+                  backgroundColor: '#ffffff',
+                  color: '#374151',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#dc2626',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              >
+                Yes, Delete
+              </button>
             </div>
           </div>
         </div>
-      </div>
-
+      )}
     </div>
   );
-};
-
-export default Profile;
+}

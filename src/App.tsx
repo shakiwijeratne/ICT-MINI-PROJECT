@@ -18,7 +18,7 @@ import { AdminDashboard,AdminUsersPage,AdminInternshipsPage,AdminNotificationsPa
 import { SupervisorDiaryReview } from './pages/supervisor/SupervisorDiaryReview';
 import { SupervisorEvaluationPage } from './pages/supervisor/evaluation';
 import { InternshipProvider } from './contexts/InternshipContext'; 
-import Profile  from './pages/Profile/Profile';
+import {ProfilePage} from './pages/Profile/Profile';
 import { AdminAssignmentsPage } from './pages/admin/Assignments';
 
 function RootRedirect() {
@@ -41,7 +41,7 @@ function AppRoutes() {
           <Route path="/student/diary" element={<StudentDiaryPage />} />
           <Route path="/student/reports" element={<StudentReportsPage />} />
           <Route path="/student/progress" element={<StudentProgressPage />} />
-          <Route path="/student/profile" element={<Profile />} />
+          <Route path="/student/profile" element={<ProfilePage />} />
         </Route>
       </Route>
 
@@ -52,7 +52,7 @@ function AppRoutes() {
           <Route path="/supervisor/diary-review" element={<SupervisorDiaryReview />}/>
           <Route path="/supervisor/analytics" element={<SupervisorAnalyticsPage />} />
           <Route path="/supervisor/evaluations" element={<SupervisorEvaluationPage />} />
-          <Route path="/supervisor/profile" element={<Profile />}/>
+          <Route path="/supervisor/profile" element={<ProfilePage />}/>
         </Route>
       </Route>
 
@@ -61,7 +61,7 @@ function AppRoutes() {
           <Route path="/company" element={<CompanyDashboard />} />
           <Route path="/company/verify" element={<CompanyVerifyPage />} />
           <Route path="/company/evaluations" element={<CompanyEvaluationsPage />} />
-          <Route path="/company/profile" element={<Profile />} />
+          <Route path="/company/profile" element={<ProfilePage />} />
         </Route>
       </Route>
 

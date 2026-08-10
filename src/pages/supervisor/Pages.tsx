@@ -164,14 +164,40 @@ export function SupervisorReportsPage() {
     await updateReport(report.id, {
       status: 'supervisor_approved',
       supervisorFeedback: feedback[report.id] ?? 'Approved — good progress',
+      uniApproval: {
+        supervisorId: user?.uid || 'unknown-id',
+        supervisorName: user?.displayName || 'University Supervisor',
+        designation: 'Academic Supervisor',
+        timestamp: new Date().toISOString(),
+      }
     });
+
+    // 1. Notify the Student (Already dynamic)
     await createNotification({
       userId: report.studentId,
       title: 'Report Approved',
       message: `Your weekly report (${report.weekStart}) was approved by your university supervisor`,
       type: 'success',
-      read: false,
+      read: false, // Make sure it's unread!
     });
+
+    // 2. NEW: Fetch the internship to dynamically notify the Company Supervisor
+    const internships = await getInternships();
+    const studentInternship = internships.find((i) => i.studentId === report.studentId);
+    const targetCompanyId = studentInternship?.companyId;
+
+    if (targetCompanyId) {
+      await createNotification({
+        userId: targetCompanyId,
+        title: 'Report Fully Approved',
+        message: `${report.studentName}'s report for ${report.weekStart} received final university approval.`,
+        type: 'success',
+        read: false,
+      });
+    }else {
+      console.warn(`No active company found for student ${report.studentName}. Notification skipped.`);
+    }
+    
     setReports((prev) => prev.filter((r) => r.id !== report.id));
   };
 

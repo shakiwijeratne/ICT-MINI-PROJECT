@@ -4,7 +4,6 @@ import { PageHeader, Card } from '../../components/ui';
 import { getAllUsers, updateUser } from '../../services/authService';
 import type { UserProfile } from '../../types';
 
-
 export function AdminAssignmentsPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,7 +34,6 @@ export function AdminAssignmentsPage() {
     void loadUsers();
   }, []);
 
-  // Use the exact 'supervisor' role as defined in UserRole type
   const students = useMemo(() => users.filter(u => u.role === 'student'), [users]);
   const supervisors = useMemo(() => users.filter(u => u.role === 'supervisor'), [users]);
 
@@ -49,7 +47,6 @@ export function AdminAssignmentsPage() {
   }, [students, searchQuery]);
 
   const handleToggleAssignment = (student: UserProfile, targetSupervisor: UserProfile) => {
-    // Replaced 'assignedSupervisorId' with 'supervisorId' to match UserProfile type
     const isCurrentlyAssignedHere = student.supervisorId === targetSupervisor.uid;
     const isAssignedElsewhere = student.supervisorId && student.supervisorId !== targetSupervisor.uid;
 
@@ -71,7 +68,6 @@ export function AdminAssignmentsPage() {
   const executeAssignment = async (studentId: string, targetSupervisorId: string) => {
     try {
       await updateUser(studentId, { supervisorId: targetSupervisorId });
-      
       setUsers(prev => prev.map(u => 
         u.uid === studentId ? { ...u, supervisorId: targetSupervisorId } : u
       ));
@@ -205,7 +201,6 @@ export function AdminAssignmentsPage() {
             );
           })}
         </div>
-
       </div>
 
       {conflictModal.isOpen && (

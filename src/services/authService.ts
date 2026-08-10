@@ -3,6 +3,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   type User,
 } from 'firebase/auth';
 import {
@@ -47,8 +48,11 @@ export async function registerUser(
     ) as UserProfile;
 
     await setDoc(doc(db, 'users', cred.user.uid), cleanProfile);
-      return profile;
-    }
+    
+    // FIX: Reset timer on registration
+    localStorage.setItem('app_last_active_timestamp', Date.now().toString());
+    return profile;
+  }
 
   profile.uid = uid();
   const users = localStore.getUsers();
@@ -58,6 +62,9 @@ export async function registerUser(
   users[profile.uid] = profile;
   localStore.setUsers(users);
   localStore.setSession(profile.uid);
+  
+  // FIX: Reset timer on registration fallback
+  localStorage.setItem('app_last_active_timestamp', Date.now().toString());
   return profile;
 }
 
@@ -66,6 +73,10 @@ export async function loginUser(email: string, password: string): Promise<UserPr
     const cred = await signInWithEmailAndPassword(auth, email, password);
     const snap = await getDoc(doc(db, 'users', cred.user.uid));
     if (!snap.exists()) throw new Error('User profile not found');
+    
+    // FIX: Reset the idle timer timestamp on successful login
+    localStorage.setItem('app_last_active_timestamp', Date.now().toString());
+    
     return snap.data() as UserProfile;
   }
 
@@ -74,15 +85,34 @@ export async function loginUser(email: string, password: string): Promise<UserPr
   if (!user) throw new Error('Invalid email or password');
   if (password.length < 6) throw new Error('Invalid email or password');
   localStore.setSession(user.uid);
+  
+  // FIX: Reset the idle timer timestamp for local fallback
+  localStorage.setItem('app_last_active_timestamp', Date.now().toString());
+  
   return user;
 }
 
 export async function logoutUser(): Promise<void> {
+  // FIX: Clear the old timestamp so it doesn't instantly trigger on next login
+  localStorage.removeItem('app_last_active_timestamp');
+
   if (isFirebaseConfigured && auth) {
     await signOut(auth);
     return;
   }
   localStore.setSession(null);
+}
+
+export async function resetPassword(email: string): Promise<void> {
+  if (isFirebaseConfigured && auth) {
+    await sendPasswordResetEmail(auth, email);
+    return;
+  }
+  const users = localStore.getUsers();
+  const userExists = Object.values(users).some((u) => u.email === email);
+  if (!userExists) {
+    throw new Error('User not found');
+  }
 }
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
@@ -134,9 +164,6 @@ export async function updateUser(userId: string, data: Partial<UserProfile>): Pr
     const userRef = doc(db, 'users', userId);
     await updateDoc(userRef, data);
   }
-  // Optional: If you are using localStore as a fallback like in dataService.ts
-  // const users = localStore.getUsers();
-  // localStore.setUsers(users.map(u => u.uid === userId ? { ...u, ...data } : u));
 }
 
 export async function deleteUser(uid: string): Promise<void> {
@@ -159,5 +186,8 @@ export function loginDemoUser(role: UserRole): UserProfile {
   };
   const user = localStore.getUsers()[demoIds[role]];
   localStore.setSession(user.uid);
+  
+  // FIX: Reset timer for demo users
+  localStorage.setItem('app_last_active_timestamp', Date.now().toString());
   return user;
 }
