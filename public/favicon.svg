@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+
+  <rect
+    width="100"
+    height="100"
+    rx="20"
+    fill="#0F172A"
+  />
+
+  <circle
+    cx="30"
+    cy="50"
+    r="9"
+    fill="#38BDF8"
+  />
+
+  <circle
+    cx="70"
+    cy="30"
+    r="9"
+    fill="#14B8A6"
+  />
+
+  <circle
+    cx="70"
+    cy="70"
+    r="9"
+    fill="#14B8A6"
+  />
+
+  <line
+    x1="30"
+    y1="50"
+    x2="70"
+    y2="30"
+    stroke="#38BDF8"
+    stroke-width="7"
+  />
+
+  <line
+    x1="30"
+    y1="50"
+    x2="70"
+    y2="70"
+    stroke="#38BDF8"
+    stroke-width="7"
+  />
+
+</svg>
