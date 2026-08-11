@@ -21,17 +21,13 @@ import type {
   CompanyFeedback,
 } from '../types';
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
 
+// Helper Functions
 function id(): string {
   return crypto.randomUUID();
 }
 
-// ============================================================================
 // Diary Operations
-// ============================================================================
 
 // 1. GET DIARIES - MUST map docSnap.id to entry.id
 export async function getDiaries(studentId?: string): Promise<DiaryEntry[]> {
@@ -126,10 +122,7 @@ export async function deleteDiary(diaryId: string): Promise<void> {
   localStore.setDiaries(remaining);
 }
 
-// ----------------------------------------------------------------------------
 // Diary Workflow
-// ----------------------------------------------------------------------------
-
 export async function approveDiary(
   diaryId: string,
   supervisorId: string,
@@ -156,17 +149,19 @@ export async function rejectDiary(
   });
 }
 
-// ============================================================================
 // Weekly Report Operations
-// ============================================================================
-
 export async function getReports(studentId?: string): Promise<WeeklyReport[]> {
   if (isFirebaseConfigured && db) {
     const q = studentId
       ? query(collection(db, 'reports'), where('studentId', '==', studentId), orderBy('weekStart', 'desc'))
       : query(collection(db, 'reports'), orderBy('weekStart', 'desc'));
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as WeeklyReport));
+    
+    // FIX: Spread data FIRST, map Firestore ID LAST
+    return snap.docs.map((d) => ({ 
+      ...(d.data() as WeeklyReport),
+      id: d.id 
+    }));
   }
 
   const all = localStore.getReports();
@@ -207,10 +202,8 @@ export async function updateReport(
   localStore.setReports(items);
 }
 
-// ----------------------------------------------------------------------------
-// Report Workflow
-// ----------------------------------------------------------------------------
 
+// Report Workflow
 export async function submitReport(reportId: string): Promise<void> {
   await updateReport(reportId, {
     status: 'submitted',
@@ -234,17 +227,19 @@ export async function approveReportBySupervisor(reportId: string, feedback: stri
   });
 }
 
-// ============================================================================
-// Internship Operations
-// ============================================================================
 
+// Internship Operations
 export async function getInternships(filter?: {
   studentId?: string;
   supervisorId?: string;
 }): Promise<Internship[]> {
   if (isFirebaseConfigured && db) {
     const snap = await getDocs(collection(db, 'internships'));
-    let items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Internship));
+    // FIX: Spread data FIRST, map Firestore ID LAST
+    let items = snap.docs.map((d) => ({ 
+      ...(d.data() as Internship),
+      id: d.id 
+    }));
 
     if (filter?.studentId) {
       items = items.filter((i) => i.studentId === filter.studentId);
@@ -293,17 +288,18 @@ export async function updateInternship(
   localStore.setInternships(items);
 }
 
-// ============================================================================
-// Skill Evaluation Operations
-// ============================================================================
 
+// Skill Evaluation Operations
 export async function getEvaluations(studentId?: string): Promise<SkillEvaluation[]> {
   if (isFirebaseConfigured && db) {
     const q = studentId
       ? query(collection(db, 'evaluations'), where('studentId', '==', studentId))
       : collection(db, 'evaluations');
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SkillEvaluation));
+    return snap.docs.map((d) => ({ 
+      ...(d.data() as SkillEvaluation),
+      id: d.id 
+    }));
   }
 
   const all = localStore.getEvaluations();
@@ -331,10 +327,7 @@ export async function createEvaluation(
   return full;
 }
 
-// ============================================================================
 // Notification Operations
-// ============================================================================
-
 export async function getNotifications(userId: string): Promise<AppNotification[]> {
   if (isFirebaseConfigured && db) {
     const q = query(
@@ -412,10 +405,8 @@ export async function getAllNotifications(): Promise<AppNotification[]> {
   return localStore.getNotifications();
 }
 
-// ============================================================================
-// Dashboard Statistics
-// ============================================================================
 
+// Dashboard Statistics
 export async function getStudentStatistics(studentId: string) {
   const diaries = await getDiaries(studentId);
   const reports = await getReports(studentId);
@@ -431,10 +422,8 @@ export async function getStudentStatistics(studentId: string) {
   };
 }
 
-// ============================================================================
-// Company Feedback Operations
-// ============================================================================
 
+// Company Feedback Operations
 export async function createCompanyFeedback(
   data: Omit<CompanyFeedback, 'id' | 'createdAt'>
 ): Promise<CompanyFeedback> {
@@ -461,7 +450,10 @@ export async function createCompanyFeedback(
 export async function getCompanyFeedback(studentId?: string): Promise<CompanyFeedback[]> {
   if (isFirebaseConfigured && db) {
     const snap = await getDocs(collection(db, 'companyFeedback'));
-    let items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as CompanyFeedback));
+    let items = snap.docs.map((d) => ({ 
+      ...(d.data() as CompanyFeedback),
+      id: d.id 
+    }));
 
     if (studentId) {
       items = items.filter((i) => i.studentId === studentId);

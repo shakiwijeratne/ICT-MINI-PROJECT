@@ -11,7 +11,8 @@ import { StudentProgressPage } from './pages/student/Progress';
 import { SupervisorDashboard } from './pages/supervisor/Dashboard';
 import {
   SupervisorStudentsPage,
-  SupervisorAnalyticsPage,  
+  SupervisorAnalyticsPage,
+  SupervisorReportsPage  
 } from './pages/supervisor/Pages';
 import { CompanyDashboard,CompanyVerifyPage,CompanyEvaluationsPage,} from './pages/company/Pages';
 import { AdminDashboard,AdminUsersPage,AdminInternshipsPage,AdminNotificationsPage,AdminSettingsPage,} from './pages/admin/Pages';
@@ -49,6 +50,7 @@ function AppRoutes() {
         <Route element={<AppLayout />}>
           <Route path="/supervisor" element={<SupervisorDashboard />} />
           <Route path="/supervisor/students" element={<SupervisorStudentsPage />} />
+          <Route path="/supervisor/reports" element={<SupervisorReportsPage />} />
           <Route path="/supervisor/diary-review" element={<SupervisorDiaryReview />}/>
           <Route path="/supervisor/analytics" element={<SupervisorAnalyticsPage />} />
           <Route path="/supervisor/evaluations" element={<SupervisorEvaluationPage />} />

@@ -6,6 +6,7 @@ import {
   updateReport,
   createEvaluation,
   createNotification,
+  getInternships,
 } from "../../services/dataService";
 import {
   PageHeader,
@@ -14,7 +15,8 @@ import {
   StatusBadge,
   EmptyState,
 } from "../../components/ui";
-import { TECHNICAL_SKILLS, SOFT_SKILLS, type WeeklyReport } from "../../types";
+import { TECHNICAL_SKILLS, SOFT_SKILLS, type WeeklyReport, type UserProfile } from "../../types";
+import { ProcessedReportsAccordion } from "../../components/ui/ProcessedReportsAccordion";
 import { getAllUsers } from "../../services/authService";
 
 export function CompanyDashboard() {
@@ -65,57 +67,107 @@ export function CompanyDashboard() {
 
 export function CompanyVerifyPage() {
   const { user } = useAuth();
-  const [reports, setReports] = useState<WeeklyReport[]>([]);
+  const [reports, setReports] = useState<WeeklyReport[]>([]); // Pending reports
+  const [processedReports, setProcessedReports] = useState<WeeklyReport[]>([]); // History
+  const [studentsList, setStudentsList] = useState<UserProfile[]>([]);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getReports().then((all) =>
-      setReports(all.filter((r) => r.status === "submitted")),
-    );
-  }, []);
+    if (!user) return;
+
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [allUsers, allReports, allInternships] = await Promise.all([
+          getAllUsers(),
+          getReports(),
+          getInternships(), // Make sure this is imported at the top!
+        ]);
+
+        // 1. Find internships belonging to this company supervisor
+        const companyInternships = allInternships.filter((i) => i.companyId === user.uid);
+        const companyStudentIds = new Set(companyInternships.map((i) => i.studentId));
+
+        // 2. Save students for the accordion (fallback to all student users if none assigned)
+        if (companyStudentIds.size > 0) {
+          setStudentsList(allUsers.filter((u) => companyStudentIds.has(u.uid)));
+        } else {
+           // Fallback: If no strict link exists yet, grab all students for testing
+          setStudentsList(allUsers.filter((u) => u.role === 'student'));
+        }
+
+        // 3. Filter Pending with fallback logic
+        const pending = allReports.filter(
+          (r) => (companyStudentIds.size === 0 || companyStudentIds.has(r.studentId)) && r.status === "submitted"
+        );
+
+        // 4. Filter Processed with fallback logic
+        const processed = allReports.filter(
+          (r) => (companyStudentIds.size === 0 || companyStudentIds.has(r.studentId)) && r.status !== "submitted"
+        );
+
+        setReports(pending);
+        setProcessedReports(processed);
+      } catch (error) {
+        console.error("Failed to fetch reports:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [user]);
 
   const verify = async (report: WeeklyReport) => {
     await updateReport(report.id, {
       status: "company_verified",
       companyFeedback: feedback[report.id] ?? "Activities verified",
       companyApproval: {
-        supervisorId: user?.uid || 'unknown-id',
-        supervisorName: user?.displayName || 'Company Supervisor',
-        designation: 'Industry Supervisor',
+        supervisorId: user?.uid || "unknown-id",
+        supervisorName: user?.displayName || "Company Supervisor",
+        designation: "Industry Supervisor",
         timestamp: new Date().toISOString(),
-      }
+      },
     });
+
     try {
-        const allUsers = await getAllUsers();
-        const studentProfile = allUsers.find((u) => u.uid === report.studentId);
-        const targetSupervisorId = studentProfile?.supervisorId;
+      const allUsers = await getAllUsers();
+      const studentProfile = allUsers.find((u) => u.uid === report.studentId);
+      const targetSupervisorId = studentProfile?.supervisorId;
 
-        // 3. Notify University Supervisor ONLY if one is assigned
-        if (targetSupervisorId) {
-          await createNotification({
-            userId: targetSupervisorId, 
-            title: "Report Verified",
-            message: `${report.studentName}'s report verified by company — awaiting your approval`,
-            type: "info",
-            read: false // Arrives unread
-          });
-        } else {
-          console.warn(`No University Supervisor assigned for student ${report.studentName}. Notification skipped.`);
-        }
-
-        // 4. Always notify the student
+      // 3. Notify University Supervisor ONLY if one is assigned
+      if (targetSupervisorId) {
         await createNotification({
-          userId: report.studentId,
+          userId: targetSupervisorId,
           title: "Report Verified",
-          message: `Your weekly report (${report.weekStart}) was verified by the company`,
-          type: "success",
-          read: false
+          message: `${report.studentName}'s report verified by company — awaiting your approval`,
+          type: "info",
+          read: false, // Arrives unread
         });
-
-        setReports((prev) => prev.filter((r) => r.id !== report.id));
-      } catch (error) {
-        console.error("Failed to send verification notifications:", error);
+      } else {
+        console.warn(`No University Supervisor assigned for student ${report.studentName}. Notification skipped.`);
       }
+
+      // 4. Always notify the student
+      await createNotification({
+        userId: report.studentId,
+        title: "Report Verified",
+        message: `Your weekly report (${report.weekStart}) was verified by the company`,
+        type: "success",
+        read: false,
+      });
+
+      // Remove from pending UI
+      setReports((prev) => prev.filter((r) => r.id !== report.id));
+      
+      // Instantly add to processed UI so the supervisor sees it move down
+      const updatedReport = { ...report, status: 'company_verified' as const };
+      setProcessedReports((prev) => [updatedReport, ...prev]);
+
+    } catch (error) {
+      console.error("Failed to send verification notifications:", error);
+    }
   };
 
   return (
@@ -124,8 +176,11 @@ export function CompanyVerifyPage() {
         title="Verify Weekly Reports"
         subtitle="Review and verify intern weekly activity reports"
       />
+      
       <Card>
-        {reports.length === 0 ? (
+        {loading ? (
+           <p style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>Loading reports...</p>
+        ) : reports.length === 0 ? (
           <EmptyState message="No reports to verify" />
         ) : (
           reports.map((report) => (
@@ -152,6 +207,15 @@ export function CompanyVerifyPage() {
           ))
         )}
       </Card>
+
+      {/* The new Accordion goes right here! */}
+      {!loading && (
+        <ProcessedReportsAccordion 
+          reports={processedReports} 
+          students={studentsList} 
+          viewerRole="company_supervisor" 
+        />
+      )}
     </div>
   );
 }

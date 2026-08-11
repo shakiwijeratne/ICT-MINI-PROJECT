@@ -41,7 +41,6 @@ export function StudentDiaryPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [sortType, setSortType] = useState("newest");
-
   const initialFormState = useMemo(() => ({
     date: format(new Date(), "yyyy-MM-dd"),
     title: "",
@@ -49,6 +48,7 @@ export function StudentDiaryPage() {
     tasksCompleted: "",
     hoursWorked: 8,
     skillsUsed: "",
+    aiEnhanced: false
   }), []);
 
   const draftKey = user?.uid ? `diary_draft_${user.uid}` : "";
@@ -63,14 +63,7 @@ export function StudentDiaryPage() {
   const resetForm = () => {
     setEditingId(null);
     clearDraft(); 
-    setForm({
-      date: format(new Date(), "yyyy-MM-dd"),
-      title: "",
-      content: "",
-      tasksCompleted: "",
-      hoursWorked: 8,
-      skillsUsed: "",
-    });
+    setForm(initialFormState); // Cleaner way using your memoized initial state
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,7 +86,7 @@ export function StudentDiaryPage() {
         tasksCompleted: form.tasksCompleted.split("\n").filter(Boolean),
         hoursWorked: Number(form.hoursWorked),
         skillsUsed: form.skillsUsed.split(",").map((s) => s.trim()).filter(Boolean),
-        aiEnhanced: false,
+        aiEnhanced: form.aiEnhanced, // <-- Read from form state
         status: "pending" as const,
         createdAt: new Date().toISOString(),
       };
@@ -116,21 +109,23 @@ export function StudentDiaryPage() {
     }
   };
 
- const handleEnhance = async () => {
+  const handleEnhance = async () => {
     if (!form.content.trim()) return;
     
     setAiLoading(true);
-    setMessage(""); // Clear previous alerts
+    setMessage("");
 
     try {
       const enhanced = await enhanceDiaryEntry(form.content, form.title || "Diary Entry");
       
-      // SUCCESS PATH: Only update form state when we get a real string back
-      setForm((previous: any) => ({ ...previous, content: enhanced }));
+      setForm((previous: any) => ({ 
+        ...previous, 
+        content: enhanced, 
+        aiEnhanced: true // <-- Update inside form state
+      }));
       setIsError(false);
       setMessage("AI enhancement applied successfully!");
     } catch (error: any) {
-      // FAILURE PATH: form.content is untouched! User's text remains completely safe.
       console.error("AI enhance error:", error);
       setIsError(true);
       setMessage(`AI Enhancement Failed: Service unavailable`);
@@ -148,6 +143,7 @@ export function StudentDiaryPage() {
       tasksCompleted: entry.tasksCompleted.join("\n"),
       hoursWorked: entry.hoursWorked,
       skillsUsed: entry.skillsUsed.join(", "),
+      aiEnhanced: Boolean(entry.aiEnhanced), // <-- Load existing state
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };

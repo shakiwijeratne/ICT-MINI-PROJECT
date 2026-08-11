@@ -1,11 +1,22 @@
 import { useEffect, useState } from 'react';
+import {
+  CheckCircle,
+  XCircle,
+  Building,
+  UserCheck,
+  Calendar,
+  FileText,
+  Clock,
+  MessageSquare,
+} from 'lucide-react';
 import { useAuth } from '../../contexts/useAuth';
 import {
    getDiaries, getReports, updateReport, createNotification,getInternships
   } from '../../services/dataService';
 import { getAllUsers } from '../../services/authService';
-import { PageHeader, Card, EmptyState } from '../../components/ui';
-import type { WeeklyReport, UserProfile} from '../../types';
+import { PageHeader, Card, EmptyState, StatCard, StatusBadge } from '../../components/ui';
+import { ProcessedReportsAccordion } from '../../components/ui/ProcessedReportsAccordion';
+import type { WeeklyReport, UserProfile, Internship} from '../../types';
 
 
 export function SupervisorStudentsPage() {
@@ -142,106 +153,288 @@ export function SupervisorStudentsPage() {
 export function SupervisorReportsPage() {
   const { user } = useAuth();
   const [reports, setReports] = useState<WeeklyReport[]>([]);
+  // 1. ADDED MISSING STATE FOR PROCESSED REPORTS
+  const [processedReports, setProcessedReports] = useState<WeeklyReport[]>([]);
+  const [studentsList, setStudentsList] = useState<UserProfile[]>([]);
+  const [internships, setInternships] = useState<Internship[]>([]);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState<boolean>(true);
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'warning'; text: string } | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    Promise.all([getAllUsers(), getReports()]).then(([users, allReports]) => {
-      const assignedStudentIds = new Set(
-        users.filter((u) => u.role === 'student' && u.supervisorId === user.uid).map((u) => u.uid)
-      );
 
-      const filtered = allReports.filter((r) => 
-        (assignedStudentIds.size === 0 || assignedStudentIds.has(r.studentId)) &&
-        (r.status === 'company_verified' || r.status === 'supervisor_approved')
-      );
-      setReports(filtered);
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [users, allReports, allInternships] = await Promise.all([
+          getAllUsers(),
+          getReports(),
+          getInternships(),
+        ]);
+
+        // 1. Get assigned student UIDs for this university supervisor
+        const assignedStudents = users.filter((u) => u.role === 'student' && u.supervisorId === user.uid);
+        const assignedStudentIds = new Set(assignedStudents.map((u) => u.uid));
+
+        // 2. Filter reports strictly inside the async function where 'allReports' exists
+        const pending = allReports.filter(
+          (r) => (assignedStudentIds.size === 0 || assignedStudentIds.has(r.studentId)) && r.status === 'company_verified'
+        );
+
+        const processed = allReports.filter(
+          (r) => assignedStudentIds.has(r.studentId) && (r.status === 'supervisor_approved' || r.status === 'rejected')
+        );
+
+        setReports(pending);
+        setProcessedReports(processed); // 3. NOW THIS WORKS
+        setInternships(allInternships);
+        setStudentsList(assignedStudents);
+      } catch (error) {
+        console.error('Failed to fetch reports:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [user]);
 
   const approve = async (report: WeeklyReport) => {
-    await updateReport(report.id, {
-      status: 'supervisor_approved',
-      supervisorFeedback: feedback[report.id] ?? 'Approved — good progress',
-      uniApproval: {
-        supervisorId: user?.uid || 'unknown-id',
-        supervisorName: user?.displayName || 'University Supervisor',
-        designation: 'Academic Supervisor',
-        timestamp: new Date().toISOString(),
-      }
-    });
+    const supervisorComment = feedback[report.id]?.trim() || 'Approved — good academic progress';
 
-    // 1. Notify the Student (Already dynamic)
-    await createNotification({
-      userId: report.studentId,
-      title: 'Report Approved',
-      message: `Your weekly report (${report.weekStart}) was approved by your university supervisor`,
-      type: 'success',
-      read: false, // Make sure it's unread!
-    });
+    try {
+      // 1. Grant final University Supervisor Approval
+      await updateReport(report.id, {
+        status: 'supervisor_approved',
+        supervisorFeedback: supervisorComment,
+        uniApproval: {
+          supervisorId: user?.uid || 'unknown-id',
+          supervisorName: user?.displayName || 'University Supervisor',
+          designation: 'Academic Supervisor',
+          timestamp: new Date().toISOString(),
+        },
+      });
 
-    // 2. NEW: Fetch the internship to dynamically notify the Company Supervisor
-    const internships = await getInternships();
-    const studentInternship = internships.find((i) => i.studentId === report.studentId);
-    const targetCompanyId = studentInternship?.companyId;
-
-    if (targetCompanyId) {
+      // 2. Notify Student
       await createNotification({
-        userId: targetCompanyId,
-        title: 'Report Fully Approved',
-        message: `${report.studentName}'s report for ${report.weekStart} received final university approval.`,
+        userId: report.studentId,
+        title: 'Report Approved',
+        message: `Your weekly report (${report.weekStart}) received final university approval.`,
         type: 'success',
         read: false,
       });
-    }else {
-      console.warn(`No active company found for student ${report.studentName}. Notification skipped.`);
+
+      // 3. Notify Company Supervisor
+      const studentInternship = internships.find((i) => i.studentId === report.studentId);
+      if (studentInternship?.companyId) {
+        await createNotification({
+          userId: studentInternship.companyId,
+          title: 'Report Fully Approved',
+          message: `${report.studentName}'s report for ${report.weekStart} received final university approval.`,
+          type: 'success',
+          read: false,
+        });
+      }
+
+      setActionMessage({ type: 'success', text: `Report for ${report.studentName} approved successfully.` });
+      setReports((prev) => prev.filter((r) => r.id !== report.id));
+    } catch (err) {
+      console.error('Failed to approve report:', err);
     }
-    
-    setReports((prev) => prev.filter((r) => r.id !== report.id));
   };
 
   const reject = async (report: WeeklyReport) => {
-    await updateReport(report.id, {
-      status: 'rejected',
-      supervisorFeedback: feedback[report.id] ?? 'Please revise and resubmit',
-    });
-    await createNotification({
-      userId: report.studentId,
-      title: 'Report Rejected',
-      message: `Your weekly report (${report.weekStart}) needs revision`,
-      type: 'warning',
-      read: false,
-    });
-    setReports((prev) => prev.filter((r) => r.id !== report.id));
+    const supervisorComment = feedback[report.id]?.trim() || 'Please revise and resubmit.';
+
+    try {
+      await updateReport(report.id, {
+        status: 'rejected',
+        supervisorFeedback: supervisorComment,
+      });
+
+      await createNotification({
+        userId: report.studentId,
+        title: 'Report Revision Requested',
+        message: `Your weekly report (${report.weekStart}) requires revision as requested by your university supervisor.`,
+        type: 'warning',
+        read: false,
+      });
+
+      setActionMessage({ type: 'warning', text: `Report for ${report.studentName} sent back for revision.` });
+      setReports((prev) => prev.filter((r) => r.id !== report.id));
+    } catch (err) {
+      console.error('Failed to reject report:', err);
+    }
   };
 
   return (
     <div className="page">
-      <PageHeader title="Report Review" subtitle="Approve or reject company-verified weekly reports" />
+      <PageHeader
+        title="Academic Report Approval"
+        subtitle="Review and grant final approval for company-verified weekly reports"
+      />
+
+      {/* Stats Summary */}
+      <div className="stats-grid" style={{ marginBottom: '1.5rem' }}>
+        <StatCard
+          label="Pending Academic Approval"
+          value={reports.length}
+          icon={<Clock size={24} color="#f59e0b" />}
+        />
+      </div>
+
+      {actionMessage && (
+        <div className={`alert alert-${actionMessage.type}`} style={{ marginBottom: '1.2rem' }}>
+          {actionMessage.text}
+        </div>
+      )}
 
       <Card>
-        {reports.length === 0 ? (
-          <EmptyState message="No reports awaiting your review" />
+        {loading ? (
+          <p style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>Loading pending reports...</p>
+        ) : reports.length === 0 ? (
+          <EmptyState message="No company-verified reports currently awaiting academic approval." />
         ) : (
-          reports.map((report) => (
-            <div key={report.id} className="report-item">
-              <strong>{report.studentName} — Week {report.weekStart}</strong>
-              <pre className="report-summary">{report.summary.slice(0, 500)}...</pre>
-              {report.companyFeedback && <p><em>Company: {report.companyFeedback}</em></p>}
-              <textarea
-                placeholder="Supervisor feedback..."
-                value={feedback[report.id] ?? ''}
-                onChange={(e) => setFeedback({ ...feedback, [report.id]: e.target.value })}
-              />
-              <div className="form-actions">
-                <button type="button" className="btn btn-primary btn-sm" onClick={() => approve(report)}>Approve</button>
-                <button type="button" className="btn btn-outline btn-sm danger" onClick={() => reject(report)}>Reject</button>
-              </div>
-            </div>
-          ))
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {reports.map((report) => {
+              const studentInternship = internships.find((i) => i.studentId === report.studentId);
+              const companyName = studentInternship?.companyName || 'Assigned Company';
+              const companySupervisorName = report.companyApproval?.supervisorName || 'Industry Supervisor';
+
+              return (
+                <div
+                  key={report.id}
+                  style={{
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '10px',
+                    padding: '20px',
+                    background: '#ffffff',
+                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+                  }}
+                >
+                  {/* Student & Internship Info */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      flexWrap: 'wrap',
+                      gap: '12px',
+                      marginBottom: '14px',
+                      borderBottom: '1px solid #f1f5f9',
+                      paddingBottom: '12px',
+                    }}
+                  >
+                    <div>
+                      <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', color: '#1e293b' }}>
+                        {report.studentName}
+                      </h3>
+                      <div style={{ display: 'flex', gap: '16px', fontSize: '0.875rem', color: '#64748b', flexWrap: 'wrap' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Building size={16} /> {companyName}
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Calendar size={16} /> Week: {report.weekStart} {report.weekEnd ? `to ${report.weekEnd}` : ''}
+                        </span>
+                      </div>
+                    </div>
+                    <StatusBadge status={report.status} />
+                  </div>
+
+                  {/* Company Verification Banner */}
+                  <div
+                    style={{
+                      background: '#f0fdf4',
+                      borderLeft: '4px solid #16a34a',
+                      padding: '12px 16px',
+                      borderRadius: '4px',
+                      marginBottom: '16px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#15803d', fontWeight: 600, fontSize: '0.875rem', marginBottom: '4px' }}>
+                      <UserCheck size={16} /> Verified by Company ({companySupervisorName})
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', fontStyle: 'italic' }}>
+                      "{report.companyFeedback || 'Activities verified without additional notes.'}"
+                    </p>
+                  </div>
+
+                  {/* Student Summary */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#475569', fontSize: '0.9rem', marginBottom: '6px' }}>
+                      <FileText size={16} /> Weekly Summary
+                    </div>
+                    <pre
+                      style={{
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'inherit',
+                        background: '#f8fafc',
+                        padding: '14px',
+                        borderRadius: '8px',
+                        fontSize: '0.9rem',
+                        color: '#1e293b',
+                        border: '1px solid #e2e8f0',
+                        margin: 0,
+                      }}
+                    >
+                      {report.summary}
+                    </pre>
+                  </div>
+
+                  {/* Academic Feedback Field */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#475569', fontSize: '0.875rem', marginBottom: '6px' }}>
+                      <MessageSquare size={16} /> Academic Supervisor Feedback
+                    </label>
+                    <textarea
+                      placeholder="Add supervisor feedback or guidance..."
+                      value={feedback[report.id] ?? ''}
+                      onChange={(e) => setFeedback({ ...feedback, [report.id]: e.target.value })}
+                      style={{
+                        width: '100%',
+                        minHeight: '80px',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontFamily: 'inherit',
+                        fontSize: '0.9rem',
+                        resize: 'vertical',
+                      }}
+                    />
+                  </div>
+
+                  {/* Approval Actions */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline danger"
+                      onClick={() => reject(report)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <XCircle size={18} /> Reject / Request Revision
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => approve(report)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <CheckCircle size={18} /> Approve Report
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </Card>
+      <ProcessedReportsAccordion 
+        reports={processedReports} 
+        students={studentsList} 
+        viewerRole="university_supervisor" 
+      />
     </div>
   );
 }

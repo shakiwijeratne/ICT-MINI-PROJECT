@@ -14,14 +14,17 @@ export interface UserProfile {
   role: UserRole;
   photoURL?: string;
   companyId?: string;
+  companySupervisor: string;
   companyName?: string;
   supervisorId?: string;
+  universitySupervisor: string;
   designation?: string; //
   universityName?: string;
   department?: string;
   indexNumber?: string;
   phone?: string;
   createdAt: string;
+  internshipPeriod: string;
 }
 
 export interface StudentEvaluation {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Users, Building2, Bell, Send} from 'lucide-react';
-import { getAllUsers, deleteUser } from '../../services/authService';
+import { getAllUsers, deleteUser, updateUser } from '../../services/authService';
 import {
   getInternships,
   createInternship,
@@ -58,12 +58,17 @@ export function AdminDashboard() {
               {notifications
                 .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                 .slice(0, 5)
-                .map((notif) => (
-                <li key={notif.id}>
-                  <strong>{notif.title}</strong>
-                  <span>{notif.message} • Sent to: {notif.userId}</span>
-                </li>
-              ))}
+                .map((notif) => {
+                  const user = users.find((u) => u.uid === notif.userId);
+                  const recipientName = user ? user.displayName : 'Unknown User'; // Fallback just in case
+
+                  return (
+                    <li key={notif.id}>
+                      <strong>{notif.title}</strong>
+                      <span>{notif.message} • Sent to: {recipientName}</span>
+                    </li>
+                  );
+                })}
             </ul>
           )}
         </Card>
@@ -182,6 +187,10 @@ export function AdminInternshipsPage() {
   const students = users.filter((u) => u.role === 'student');
   const supervisors = users.filter((u) => u.role === 'supervisor');
   const companySupervisors = users.filter((u) => u.role === 'company');
+  // Filter out students who already have an active internship record
+  const availableStudents = students.filter(
+    (student) => !internships.some((internship) => internship.studentId === student.uid)
+  );
 
   // Filter registered company supervisors matching the entered company name (if specified)
   const filteredCompanySupervisors = companySupervisors.filter(
@@ -257,22 +266,41 @@ export function AdminInternshipsPage() {
       return;
     }
 
-    await createInternship({ ...form, status: 'active', progress: 0 } as any);
-    
-    setForm({
-      studentId: '',
-      studentName: '',
-      companyName: '',
-      companySupervisor: '',
-      companySupervisorEmail: '',
-      companySupervisorDesignation: '',
-      universitySupervisorId: '',
-      universitySupervisorName: '',
-      startDate: '',
-      endDate: '',
-    });
-    setSelectedSupervisorUid('');
-    load();
+    try {
+      // 1. Create the internship record
+      await createInternship({ ...form, status: 'active', progress: 0 } as any);
+      
+      // 2. Update the student's User Profile in the database
+      await updateUser(form.studentId, {
+        universitySupervisor: form.universitySupervisorName, 
+        supervisorId: form.universitySupervisorId, // Keeping ID reference if your system uses it
+        companyName: form.companyName,
+        companySupervisor: form.companySupervisor,
+        internshipPeriod: `${form.startDate} to ${form.endDate}`
+      });
+      
+      // Reset form on success
+      setForm({
+        studentId: '',
+        studentName: '',
+        companyName: '',
+        companySupervisor: '',
+        companySupervisorEmail: '',
+        companySupervisorDesignation: '',
+        universitySupervisorId: '',
+        universitySupervisorName: '',
+        startDate: '',
+        endDate: '',
+      });
+      setSelectedSupervisorUid('');
+      
+      // Refresh local data
+      load();
+      
+    } catch (error) {
+      console.error("Failed to process internship creation:", error);
+      alert("An error occurred while creating the internship and updating the profile.");
+    }
   };
 
   return (
@@ -291,14 +319,14 @@ export function AdminInternshipsPage() {
                 required
               >
                 <option value="" disabled>-- Select a Student --</option>
-                {students.map((s) => (
+                {/* Use availableStudents here */}
+                {availableStudents.map((s) => (
                   <option key={s.uid} value={s.uid}>
                     {s.displayName} ({s.email})
                   </option>
                 ))}
               </select>
             </label>
-
             <label>
               University Supervisor
               <select 

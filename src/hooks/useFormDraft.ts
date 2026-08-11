@@ -6,14 +6,17 @@ import { useState, useEffect, useCallback } from 'react';
  * @param key Unique key for localStorage (e.g., `diary_draft_${userId}`)
  * @param initialValues Default structure/data when no draft exists
  */
-export function useFormDraft<T>(key: string, initialValues: T) {
-  // 1. Initialize state: Read existing draft from localStorage or fallback to defaults
+export function useFormDraft<T extends Record<string, any>>(key: string, initialValues: T) {
+  // 1. Initialize state: Read existing draft and MERGE with defaults
   const [formData, setFormData] = useState<T>(() => {
     if (!key) return initialValues;
     try {
       const savedDraft = localStorage.getItem(key);
       if (savedDraft) {
-        return JSON.parse(savedDraft) as T;
+        const parsedDraft = JSON.parse(savedDraft) as Partial<T>;
+        // CRITICAL FIX: Merge initialValues with the parsed draft.
+        // This guarantees newly added fields (like aiEnhanced) exist!
+        return { ...initialValues, ...parsedDraft };
       }
     } catch (error) {
       console.error(`Error loading draft for key "${key}":`, error);
