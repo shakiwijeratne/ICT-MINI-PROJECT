@@ -14,11 +14,11 @@ import { StudentReportsPage } from './pages/student/Reports';
 import { StudentProgressPage } from './pages/student/Progress';
 import { StudentNotificationsPage } from './pages/student/Notifications';
 import { SupervisorDashboard } from './pages/supervisor/Dashboard';
-import { SupervisorStudentsPage, SupervisorAnalyticsPage,} from './pages/supervisor/Pages';
+import { SupervisorStudentsPage, SupervisorAnalyticsPage, SupervisorReportsPage,} from './pages/supervisor/Pages';
 import { SupervisorDiaryReview } from './pages/supervisor/SupervisorDiaryReview';
 import { SupervisorNotificationsPage } from './pages/supervisor/Notifications';
 import { SupervisorEvaluationPage } from './pages/supervisor/evaluation';
-import { CompanyDashboard,CompanyVerifyPage,CompanyEvaluationsPage,} from './pages/company/Pages';
+import { CompanyDashboard, CompanyVerifyPage, CompanyEvaluationsPage,} from './pages/company/Pages';
 import { CompanyNotificationsPage } from './pages/company/Notifications';
 import { AdminDashboard,AdminUsersPage,AdminInternshipsPage,AdminNotificationsPage,AdminSettingsPage,} from './pages/admin/Pages';
 import { AdminAssignmentsPage } from './pages/admin/Assignments';
@@ -104,7 +104,7 @@ function AppRoutes() {
 
           <Route
             path="/supervisor/reports"
-            element={<SupervisorDiaryReview />}
+            element={<SupervisorReportsPage />}
           />
 
           <Route

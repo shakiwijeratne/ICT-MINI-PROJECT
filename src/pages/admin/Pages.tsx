@@ -38,10 +38,7 @@ import type {
   AppNotification,
 } from '../../types';
 
-/* =========================================================
-   ADMIN DASHBOARD
-   ========================================================= */
-
+ 
 export function AdminDashboard() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [internships, setInternships] =
@@ -122,26 +119,32 @@ export function AdminDashboard() {
                     new Date(a.createdAt).getTime(),
                 )
                 .slice(0, 5)
-                .map((notif) => (
-                  <li key={notif.id}>
-                    <strong>{notif.title}</strong>
-                    <span>
-                      {notif.message} • Sent to:{' '}
-                      {notif.userId}
-                    </span>
-                  </li>
-                ))}
+                .map((notif) => {
+                  const recipient = users.find(
+                    (u) => u.uid === notif.userId,
+                  );
+
+                  const recipientName =
+                    recipient?.displayName ?? 'Unknown User';
+
+                  return (
+                    <li key={notif.id}>
+                      <strong>{notif.title}</strong>
+
+                      <span>
+                        {notif.message} • Sent to:{' '}
+                        {recipientName}
+                      </span>
+                    </li>
+                  );
+                })}
             </ul>
           )}
         </Card>
       </div>
     </div>
   );
-}
-
-/* =========================================================
-   USER MANAGEMENT
-   ========================================================= */
+} 
 
 export function AdminUsersPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);

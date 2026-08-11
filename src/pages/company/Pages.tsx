@@ -33,6 +33,7 @@ import {
   type SkillEvaluation,
 } from '../../types';
 import { getAllUsers } from '../../services/authService';
+import type { UserProfile } from '../../types';
 
 export function CompanyDashboard() {
   const [pending, setPending] = useState<WeeklyReport[]>([]);
@@ -89,36 +90,258 @@ export function CompanyDashboard() {
   );
 }
 
+
 export function CompanyVerifyPage() {
   const { user } = useAuth();
+
   const [reports, setReports] = useState<WeeklyReport[]>([]);
+  const [processedReports, setProcessedReports] =
+    useState<WeeklyReport[]>([]);
+  const [studentsList, setStudentsList] = useState<UserProfile[]>([]);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    getReports().then((all) =>
-      setReports(all.filter((r) => r.status === 'submitted'))
-    );
-  }, []);
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [selectedReportId, setSelectedReportId] = useState('');
 
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    const loadData = async () => {
+      setLoading(true);
+
+      try {
+        const [allUsers, allReports, allInternships] =
+          await Promise.all([
+            getAllUsers(),
+            getReports(),
+            getInternships(),
+          ]);
+
+        /*
+         * Find the company supervisor's user profile.
+         *
+         * We use the project's UserProfile type from src/types.
+         */
+        const companySupervisor = allUsers.find(
+          (u) => u.uid === user.uid
+        );
+
+        /*
+         * Find internships assigned to this company supervisor.
+         *
+         * Existing project logic:
+         * - internship.companyId must match the supervisor's companyId
+         * - internship.companySupervisor must match the logged-in
+         *   supervisor's displayName
+         */
+        const assignedInternships = allInternships.filter(
+          (internship) => {
+            const sameCompany =
+              internship.companyId ===
+              companySupervisor?.companyId;
+
+            const sameSupervisor =
+              internship.companySupervisor === user.displayName;
+
+            return sameCompany && sameSupervisor;
+          }
+        );
+
+        /*
+         * Get student IDs from the assigned internships.
+         */
+        const companyStudentIds = new Set(
+          assignedInternships
+            .map((internship) => internship.studentId)
+            .filter(
+              (studentId): studentId is string =>
+                Boolean(studentId)
+            )
+        );
+
+        /*
+         * Get the actual student profiles.
+         */
+        const assignedStudents = allUsers.filter(
+          (u) =>
+            u.role === 'student' &&
+            companyStudentIds.has(u.uid)
+        );
+
+        setStudentsList(assignedStudents);
+
+        /*
+         * Pending reports:
+         * Reports belonging to assigned students and still
+         * waiting for company verification.
+         */
+        const pendingReports = allReports.filter(
+          (report) =>
+            companyStudentIds.has(report.studentId) &&
+            report.status === 'submitted'
+        );
+
+        /*
+         * Previous/processed reports:
+         * Reports belonging to assigned students that have
+         * already passed the company verification stage.
+         *
+         * This includes:
+         * - company_verified
+         * - university_verified
+         * - other later workflow statuses
+         */
+        const previousReports = allReports.filter(
+          (report) =>
+            companyStudentIds.has(report.studentId) &&
+            report.status !== 'submitted'
+        );
+
+        setReports(pendingReports);
+        setProcessedReports(previousReports);
+
+        /*
+         * Automatically select the first assigned student.
+         */
+        if (assignedStudents.length > 0) {
+          const firstStudent = assignedStudents[0];
+
+          setSelectedStudentId(firstStudent.uid);
+
+          /*
+           * Automatically select the newest previous report
+           * for the first student, if one exists.
+           */
+          const firstStudentReports = previousReports
+            .filter(
+              (report) =>
+                report.studentId === firstStudent.uid
+            )
+            .sort(
+              (a, b) =>
+                new Date(b.weekStart).getTime() -
+                new Date(a.weekStart).getTime()
+            );
+
+          setSelectedReportId(
+            firstStudentReports.length > 0
+              ? firstStudentReports[0].id
+              : ''
+          );
+        } else {
+          setSelectedStudentId('');
+          setSelectedReportId('');
+        }
+      } catch (error) {
+        console.error(
+          'Failed to fetch company verification data:',
+          error
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [user]);
+
+  /*
+   * Previous reports belonging to the currently selected student.
+   */
+  const selectedStudentReports = processedReports
+    .filter(
+      (report) =>
+        report.studentId === selectedStudentId
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.weekStart).getTime() -
+        new Date(a.weekStart).getTime()
+    );
+
+  /*
+   * Get the currently selected previous report.
+   */
+  const selectedPreviousReport =
+    selectedStudentReports.find(
+      (report) => report.id === selectedReportId
+    );
+
+  /*
+   * Change selected student and automatically select the
+   * newest previous report for that student.
+   */
+  const handleStudentChange = (studentId: string) => {
+    setSelectedStudentId(studentId);
+
+    const studentReports = processedReports
+      .filter(
+        (report) =>
+          report.studentId === studentId
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.weekStart).getTime() -
+          new Date(a.weekStart).getTime()
+      );
+
+    setSelectedReportId(
+      studentReports.length > 0
+        ? studentReports[0].id
+        : ''
+    );
+  };
+
+  /*
+   * Verify a pending report.
+   */
   const verify = async (report: WeeklyReport) => {
-    await updateReport(report.id, {
-      status: 'company_verified',
-      companyFeedback: feedback[report.id] ?? 'Activities verified',
-      companyApproval: {
-        supervisorId: user?.uid || 'unknown-id',
-        supervisorName: user?.displayName || 'Company Supervisor',
-        designation: 'Industry Supervisor',
-        timestamp: new Date().toISOString(),
-      },
-    });
+    if (!user) {
+      return;
+    }
 
     try {
+      const companyFeedback =
+        feedback[report.id]?.trim() ||
+        'Activities verified';
+
+      const approval = {
+        supervisorId: user.uid,
+        supervisorName:
+          user.displayName || 'Company Supervisor',
+        designation: 'Industry Supervisor',
+        timestamp: new Date().toISOString(),
+      };
+
+      /*
+       * Update the report in Firestore.
+       */
+      await updateReport(report.id, {
+        status: 'company_verified',
+        companyFeedback,
+        companyApproval: approval,
+      });
+
+      /*
+       * Find the student's university supervisor.
+       */
       const allUsers = await getAllUsers();
+
       const studentProfile = allUsers.find(
         (u) => u.uid === report.studentId
       );
-      const targetSupervisorId = studentProfile?.supervisorId;
 
+      const targetSupervisorId =
+        studentProfile?.supervisorId;
+
+      /*
+       * Notify the university supervisor if one is assigned.
+       */
       if (targetSupervisorId) {
         await createNotification({
           userId: targetSupervisorId,
@@ -133,6 +356,9 @@ export function CompanyVerifyPage() {
         );
       }
 
+      /*
+       * Notify the student.
+       */
       await createNotification({
         userId: report.studentId,
         title: 'Report Verified',
@@ -141,9 +367,52 @@ export function CompanyVerifyPage() {
         read: false,
       });
 
-      setReports((prev) => prev.filter((r) => r.id !== report.id));
+      /*
+       * Remove the report from the pending list.
+       */
+      setReports((prev) =>
+        prev.filter((r) => r.id !== report.id)
+      );
+
+      /*
+       * Add the newly verified report to the previous
+       * reports list immediately.
+       */
+      const updatedReport: WeeklyReport = {
+        ...report,
+        status: 'company_verified',
+        companyFeedback,
+        companyApproval: approval,
+      };
+
+      setProcessedReports((prev) => [
+        updatedReport,
+        ...prev.filter(
+          (r) => r.id !== report.id
+        ),
+      ]);
+
+      /*
+       * Select the student and newly verified report so
+       * it is immediately visible in the previous reports
+       * section.
+       */
+      setSelectedStudentId(report.studentId);
+      setSelectedReportId(report.id);
+
+      /*
+       * Clear the feedback field for the verified report.
+       */
+      setFeedback((prev) => {
+        const updated = { ...prev };
+        delete updated[report.id];
+        return updated;
+      });
     } catch (error) {
-      console.error('Failed to send verification notifications:', error);
+      console.error(
+        'Failed to verify report:',
+        error
+      );
     }
   };
 
@@ -154,26 +423,45 @@ export function CompanyVerifyPage() {
         subtitle="Review and verify intern weekly activity reports"
       />
 
+      {/* Pending reports */}
       <Card>
-        {reports.length === 0 ? (
+        <h3>Reports Awaiting Verification</h3>
+
+        {loading ? (
+          <p
+            style={{
+              padding: '24px',
+              textAlign: 'center',
+              color: '#64748b',
+            }}
+          >
+            Loading reports...
+          </p>
+        ) : reports.length === 0 ? (
           <EmptyState message="No reports to verify" />
         ) : (
           reports.map((report) => (
-            <div key={report.id} className="report-item">
+            <div
+              key={report.id}
+              className="report-item"
+            >
               <strong>
-                {report.studentName} — {report.weekStart} to {report.weekEnd}
+                {report.studentName} — {report.weekStart} to{' '}
+                {report.weekEnd}
               </strong>
 
-              <pre className="report-summary">{report.summary}</pre>
+              <pre className="report-summary">
+                {report.summary}
+              </pre>
 
               <textarea
                 placeholder="Verification feedback..."
                 value={feedback[report.id] ?? ''}
                 onChange={(e) =>
-                  setFeedback({
-                    ...feedback,
+                  setFeedback((prev) => ({
+                    ...prev,
                     [report.id]: e.target.value,
-                  })
+                  }))
                 }
               />
 
@@ -188,9 +476,194 @@ export function CompanyVerifyPage() {
           ))
         )}
       </Card>
+
+      {/* Previous approved/processed reports */}
+      {!loading && (
+        <Card>
+          <h3>Previous Approved Reports</h3>
+
+          {studentsList.length === 0 ? (
+            <EmptyState message="No assigned students found." />
+          ) : (
+            <>
+              <label>
+                Assigned Student
+
+                <select
+                  value={selectedStudentId}
+                  onChange={(e) =>
+                    handleStudentChange(e.target.value)
+                  }
+                >
+                  <option value="">
+                    Select an assigned student
+                  </option>
+
+                  {studentsList.map((student) => (
+                    <option
+                      key={student.uid}
+                      value={student.uid}
+                    >
+                      {student.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {selectedStudentId && (
+                <div style={{ marginTop: '20px' }}>
+                  <label>
+                    Previous Report
+
+                    <select
+                      value={selectedReportId}
+                      onChange={(e) =>
+                        setSelectedReportId(e.target.value)
+                      }
+                    >
+                      <option value="">
+                        Select a previous report
+                      </option>
+
+                      {selectedStudentReports.map(
+                        (report) => (
+                          <option
+                            key={report.id}
+                            value={report.id}
+                          >
+                            Week {report.weekStart} -{' '}
+                            {report.weekEnd}
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </label>
+
+                  {selectedStudentReports.length === 0 && (
+                    <p
+                      style={{
+                        marginTop: '12px',
+                        color: '#64748b',
+                      }}
+                    >
+                      No previous approved reports found
+                      for this student.
+                    </p>
+                  )}
+
+                  {selectedPreviousReport && (
+                    <div
+                      className="report-item"
+                      style={{
+                        marginTop: '20px',
+                      }}
+                    >
+                      <strong>
+                        {selectedPreviousReport.studentName}
+                        {' — '}
+                        {selectedPreviousReport.weekStart}
+                        {' to '}
+                        {selectedPreviousReport.weekEnd}
+                      </strong>
+
+                      <div
+                        style={{
+                          marginTop: '10px',
+                          marginBottom: '10px',
+                        }}
+                      >
+                        <strong>Status: </strong>
+                        {selectedPreviousReport.status}
+                      </div>
+
+                      <pre className="report-summary">
+                        {selectedPreviousReport.summary}
+                      </pre>
+
+                      {selectedPreviousReport.companyFeedback && (
+                        <div
+                          style={{
+                            marginTop: '15px',
+                            padding: '12px',
+                            background: '#f8fafc',
+                            borderRadius: '8px',
+                          }}
+                        >
+                          <strong>
+                            Company Feedback
+                          </strong>
+
+                          <p
+                            style={{
+                              marginTop: '6px',
+                              marginBottom: 0,
+                            }}
+                          >
+                            {
+                              selectedPreviousReport.companyFeedback
+                            }
+                          </p>
+                        </div>
+                      )}
+
+                      {selectedPreviousReport.companyApproval && (
+                        <div
+                          style={{
+                            marginTop: '15px',
+                            padding: '12px',
+                            background: '#f0fdf4',
+                            borderRadius: '8px',
+                          }}
+                        >
+                          <strong>
+                            Company Approval
+                          </strong>
+
+                          <p
+                            style={{
+                              marginTop: '6px',
+                              marginBottom: 0,
+                            }}
+                          >
+                            Approved by:{' '}
+                            {
+                              selectedPreviousReport
+                                .companyApproval
+                                .supervisorName
+                            }
+                            <br />
+
+                            Designation:{' '}
+                            {
+                              selectedPreviousReport
+                                .companyApproval
+                                .designation
+                            }
+                            <br />
+
+                            Date:{' '}
+                            {new Date(
+                              selectedPreviousReport
+                                .companyApproval
+                                .timestamp
+                            ).toLocaleString()}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+      )}
     </div>
   );
 }
+
+
+
 
 function Rating({
   value,

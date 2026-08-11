@@ -221,9 +221,9 @@ export async function getReports(
     return snap.docs.map(
       (d) =>
         ({
-          id: d.id,
-          ...d.data(),
-        }) as WeeklyReport
+          ...d.data() as WeeklyReport,
+          id: d.id
+        }) 
     );
   }
 
@@ -482,9 +482,9 @@ export async function getEvaluations(
     return snap.docs.map(
       (d) =>
         ({
-          id: d.id,
-          ...d.data(),
-        }) as SkillEvaluation
+          ...d.data() as SkillEvaluation,
+          id: d.id
+        }) 
     );
   }
 
@@ -840,9 +840,9 @@ export async function getCompanyFeedback(
     let items = snap.docs.map(
       (d) =>
         ({
-          id: d.id,
-          ...d.data(),
-        }) as CompanyFeedback
+          ...d.data() as CompanyFeedback,
+          id: d.id
+        }) 
     );
 
     if (studentId) {

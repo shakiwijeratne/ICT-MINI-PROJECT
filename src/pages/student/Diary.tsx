@@ -37,11 +37,7 @@ export function StudentDiaryPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [sortType, setSortType] = useState("newest");
-
-  // ============================================================
-  // FUTURE DATE RESTRICTION
-  // Only today and previous dates are allowed.
-  // ============================================================
+ 
   const today = format(new Date(), "yyyy-MM-dd");
 
   const initialFormState = useMemo(
@@ -52,6 +48,7 @@ export function StudentDiaryPage() {
       tasksCompleted: "",
       hoursWorked: 8,
       skillsUsed: "",
+      aiEnhanced:false  
     }),
     []
   );
@@ -69,14 +66,7 @@ export function StudentDiaryPage() {
     setEditingId(null);
     clearDraft();
 
-    setForm({
-      date: format(new Date(), "yyyy-MM-dd"),
-      title: "",
-      content: "",
-      tasksCompleted: "",
-      hoursWorked: 8,
-      skillsUsed: "",
-    });
+    setForm(initialFormState);
 
     setIsError(false);
   };
@@ -90,10 +80,7 @@ export function StudentDiaryPage() {
       return;
     }
 
-    // ============================================================
-    // FUTURE DATE VALIDATION
-    // Prevent submission even if a future date is manually entered.
-    // ============================================================
+     
     if (form.date > today) {
       setIsError(true);
       setMessage(
@@ -120,50 +107,22 @@ export function StudentDiaryPage() {
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean),
-        aiEnhanced: false,
+        aiEnhanced: form.aiEnhanced,
         status: "pending" as const,
         createdAt: new Date().toISOString(),
       };
 
       if (editingId) {
-        // ========================================================
-        // UPDATE EXISTING DIARY
-        // ========================================================
         await updateDiary(editingId, payload);
-
-        setMessage("Diary updated successfully!");
-
-        // Exit edit mode and clear any saved new-entry draft.
-        setEditingId(null);
-        clearDraft();
-
-        // Reload the latest diary data from Firestore/local storage.
-        await refreshData();
-
-        // Reset form only AFTER the updated data has been saved
-        // and refreshed.
-        setForm({
-          date: format(new Date(), "yyyy-MM-dd"),
-          title: "",
-          content: "",
-          tasksCompleted: "",
-          hoursWorked: 8,
-          skillsUsed: "",
-        });
+        setMessage("Diary updated successfully!"); 
       } else {
-        // ========================================================
-        // CREATE NEW DIARY
-        // ========================================================
         await createDiary(payload);
-
         setMessage("Diary saved successfully!");
-
-        resetForm();
-
-        // Reload latest diary data.
-        await refreshData();
       }
-    } catch (error: any) {
+
+      resetForm();
+      await refreshData();
+      }catch (error: any) {
       console.error("Save diary error details:", error);
       setIsError(true);
       setMessage(
@@ -189,6 +148,7 @@ export function StudentDiaryPage() {
       setForm((previous: any) => ({
         ...previous,
         content: enhanced,
+        aiEnhanced: true
       }));
 
       setIsError(false);
@@ -212,7 +172,6 @@ export function StudentDiaryPage() {
     clearDraft();
 
     setEditingId(entry.id);
-
     setIsError(false);
     setMessage("");
 
@@ -223,6 +182,7 @@ export function StudentDiaryPage() {
       tasksCompleted: entry.tasksCompleted.join("\n"),
       hoursWorked: entry.hoursWorked,
       skillsUsed: entry.skillsUsed.join(", "),
+      aiEnhanced: Boolean(entry.aiEnhanced),
     });
 
     window.scrollTo({
