@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../../contexts/useAuth';
-import { db } from '../../services/firebase';
+import { useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { updateProfilePhoto } from '../../services/dataService'; 
 import { 
   User, 
   Mail, 
@@ -20,7 +18,9 @@ import {
   X,
   Camera
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/useAuth';
+import { db } from '../../services/firebase';
+import { updateProfilePhoto } from '../../services/dataService'; 
 
 export function ProfilePage() {
   const { user, logout } = useAuth();
@@ -33,7 +33,6 @@ export function ProfilePage() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Core visual data state
   const [profileData, setProfileData] = useState({
     displayName: user?.displayName || '',
     role: user?.role || 'student',
@@ -48,10 +47,8 @@ export function ProfilePage() {
     photoURL: user?.photoURL || ''
   });
 
-  // Mutable state for the edit form
   const [formData, setFormData] = useState({ ...profileData });
 
-  // 1. Fetch comprehensive user data from Firestore
   useEffect(() => {
     if (!user) return;
 
@@ -90,7 +87,6 @@ export function ProfilePage() {
     fetchUserData();
   }, [user]);
 
-  // 2. Handle Image Upload directly to Firebase Storage
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !user) return;
@@ -103,7 +99,6 @@ export function ProfilePage() {
         const base64String = reader.result as string;
         await updateProfilePhoto(user.uid, base64String);
         
-        // Instantly update the UI
         setProfileData(prev => ({ ...prev, photoURL: base64String }));
       } catch (error) {
         console.error("Error updating profile photo:", error);
@@ -120,14 +115,12 @@ export function ProfilePage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // 3. Save modified fields back to Firestore
   const handleSave = async () => {
     if (!user) return;
     
     try {
       const userDocRef = doc(db, 'users', user.uid);
       
-      // Update specific document fields
       await updateDoc(userDocRef, {
         name: formData.displayName, 
         phone: formData.phone,
@@ -138,7 +131,6 @@ export function ProfilePage() {
         internshipPeriod: formData.internshipPeriod,
       });
 
-      // Sync the visual profile data with the newly saved form data
       setProfileData(formData);
       setIsEditing(false);
     } catch (error) {
@@ -156,7 +148,6 @@ export function ProfilePage() {
 
   return (
     <div style={{ padding: '24px 32px 32px 32px', maxWidth: '1080px', margin: '0 auto', fontFamily: 'inherit', color: '#1f2937' }}>
-      
       <button
         type="button"
         onClick={() => navigate(-1)}
@@ -197,8 +188,6 @@ export function ProfilePage() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-            
-            {/* Interactive Avatar Container */}
             <div style={{ position: 'relative' }}>
               <div
                 onClick={() => !isLoading && !isUploading && fileInputRef.current?.click()}
@@ -290,7 +279,7 @@ export function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setFormData(profileData); // Revert changes
+                    setFormData(profileData);
                     setIsEditing(false);
                   }}
                   style={{
@@ -356,7 +345,6 @@ export function ProfilePage() {
         </div>
 
         <div style={{ padding: '32px 40px' }}>
-          
           <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#111827', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <User size={18} color="#2563eb" /> Personal Details
           </h2>
@@ -446,7 +434,6 @@ export function ProfilePage() {
               )}
             </div>
           </div>
-
         </div>
       </div>
 

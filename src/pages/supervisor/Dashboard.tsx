@@ -5,7 +5,7 @@ import {
   getInternships,
   getReports,
   getDiaries,
-  getEvaluations
+  getEvaluations,
 } from '../../services/dataService';
 import { getAllUsers } from '../../services/authService';
 import { PageHeader, Card, StatCard, EmptyState } from '../../components/ui';
@@ -21,36 +21,32 @@ export function SupervisorDashboard() {
 
   useEffect(() => {
     if (!user || !user.uid) return;
-    
+
     Promise.all([
       getAllUsers(),
       getInternships(),
       getReports(),
       getDiaries(),
-      getEvaluations()
+      getEvaluations(),
     ]).then(([users, allInternships, allReports, allDiaries, allEvaluations]) => {
-      // 1. Get all students assigned to this supervisor
       const assignedUsers = users.filter(
         (u) => u.role === 'student' && u.supervisorId === user.uid
       );
       const assignedStudentIds = new Set(assignedUsers.map((u) => u.uid));
 
-      // 2. Filter internships belonging strictly to these assigned students
-      const assignedInternships = allInternships.filter((i) => 
+      const assignedInternships = allInternships.filter((i) =>
         assignedStudentIds.has(i.studentId)
       );
       const activeStudentIds = new Set(assignedInternships.map((i) => i.studentId));
 
-      // 3. Separate active placements vs searching students
       const active = assignedUsers.filter((s) => activeStudentIds.has(s.uid));
       const searching = assignedUsers.filter((s) => !activeStudentIds.has(s.uid));
 
-      // 4. Map active interns with their internship details
       const activeWithDetails = active.map((s) => {
         const internship = assignedInternships.find((i) => i.studentId === s.uid);
         const studentDiaries = allDiaries.filter((d) => d.studentId === s.uid);
         const progress = internship?.progress ?? Math.min(100, studentDiaries.length * 10);
-        
+
         return {
           ...s,
           companyName: internship?.companyName ?? 'Assigned Company',
@@ -65,19 +61,18 @@ export function SupervisorDashboard() {
       const pending = allReports.filter((r) => r.status === 'company_verified');
       setPendingReports(pending);
 
-      // 5. Inactivity checks only apply to active interns
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
-      
+
       const inactive = activeWithDetails
         .filter((student) => {
           const recent = allDiaries.filter(
-            (d) => d.studentId === student.uid && new Date(d.date) >= weekAgo,
+            (d) => d.studentId === student.uid && new Date(d.date) >= weekAgo
           );
           return recent.length === 0;
         })
         .map((student) => student.displayName || 'Student');
-        
+
       setInactiveStudents(inactive);
     });
   }, [user]);
@@ -89,7 +84,6 @@ export function SupervisorDashboard() {
         subtitle="Monitor active placements, track placement seekers, and review reports"
       />
 
-      {/* Metrics Split */}
       <div className="stats-grid">
         <StatCard label="Active Interns" value={activeInterns.length} icon={<Users size={24} />} />
         <StatCard label="Seeking Placement" value={searchingStudents.length} icon={<Search size={24} />} />
@@ -103,7 +97,6 @@ export function SupervisorDashboard() {
         </div>
       )}
 
-      {/* Breakdown Cards */}
       <div className="grid-2">
         <Card>
           <h3>Active Interns ({activeInterns.length})</h3>
@@ -154,10 +147,12 @@ export function SupervisorDashboard() {
             </ul>
           )}
         </Card>
-        
+
         <Card>
           <h3>Evaluations & System Status</h3>
-          <p style={{ marginBottom: '1rem' }}>Total Evaluations Completed: <strong>{evaluations.length}</strong></p>
+          <p style={{ marginBottom: '1rem' }}>
+            Total Evaluations Completed: <strong>{evaluations.length}</strong>
+          </p>
           <EmptyState message="Diary approval and review actions are available in the dedicated review pages." />
         </Card>
       </div>

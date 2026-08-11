@@ -1,23 +1,7 @@
-
 import { NavLink, useNavigate } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  BookOpen,
-  FileText,
-  BarChart3,
-  Users,
-  UserPlus,
-  Building2,
-  Bell,
-  Settings,
-  LogOut,
-  ClipboardCheck,
-  Award,
-} from 'lucide-react';
-
+import { LayoutDashboard, BookOpen, FileText, BarChart3, Users, UserPlus, Building2, Bell, Settings, LogOut, ClipboardCheck, Award,} from 'lucide-react';
 import { useAuth } from '../../contexts/useAuth';
 import type { UserRole } from '../../types';
-
 
 const navItems: Record<
   UserRole,
@@ -27,7 +11,6 @@ const navItems: Record<
     icon: typeof LayoutDashboard;
   }[]
 > = {
- 
   student: [
     {
       to: '/student',
@@ -55,11 +38,6 @@ const navItems: Record<
       icon: Bell,
     },
   ],
-
-
-  // =========================
-  // COMPANY
-  // =========================
   company: [
     {
       to: '/company',
@@ -81,12 +59,12 @@ const navItems: Record<
       label: 'Notifications',
       icon: Bell,
     },
+    {
+      to: '/company/students',
+      label: 'Students',
+      icon: Users,
+    },
   ],
-
-
-  // =========================
-  // ADMIN
-  // =========================
   admin: [
     {
       to: '/admin',
@@ -119,11 +97,6 @@ const navItems: Record<
       icon: Settings,
     },
   ],
-
-
-  // =========================
-  // UNIVERSITY SUPERVISOR
-  // =========================
   supervisor: [
     {
       to: '/supervisor',
@@ -163,54 +136,35 @@ const navItems: Record<
   ],
 };
 
-
 export function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-
   if (!user) return null;
 
-
   const items = navItems[user.role];
-
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
-
   const handleProfileClick = () => {
     navigate(`/${user.role}/profile`);
   };
 
-
   return (
     <aside className="sidebar">
-
-      {/* =========================
-          BRAND
-      ========================== */}
-
       <div className="sidebar-brand">
         <div className="brand-icon">IMS</div>
-
         <div>
           <h1>CareerLink</h1>
           <p>Smart Internship Monitoring System</p>
         </div>
       </div>
 
-
-      {/* =========================
-          NAVIGATION
-      ========================== */}
-
       <nav className="sidebar-nav">
-
         {items.map(({ to, label, icon: Icon }) => (
-
           <NavLink
             key={to}
             to={to}
@@ -220,21 +174,12 @@ export function Sidebar() {
             }
           >
             <Icon size={18} />
-
             <span>{label}</span>
           </NavLink>
-
         ))}
-
       </nav>
 
-
-      {/* =========================
-          USER / PROFILE / LOGOUT
-      ========================== */}
-
       <div className="sidebar-footer">
-
         <div
           className="user-info"
           onClick={handleProfileClick}
@@ -242,15 +187,10 @@ export function Sidebar() {
             cursor: 'pointer',
             transition: 'opacity 0.2s',
           }}
-          onMouseOver={(e) =>
-            (e.currentTarget.style.opacity = '0.8')
-          }
-          onMouseOut={(e) =>
-            (e.currentTarget.style.opacity = '1')
-          }
+          onMouseOver={(e) => (e.currentTarget.style.opacity = '0.8')}
+          onMouseOut={(e) => (e.currentTarget.style.opacity = '1')}
           title="View Profile"
         >
-
           <div
             className="avatar"
             style={{
@@ -258,7 +198,6 @@ export function Sidebar() {
               padding: user.photoURL ? 0 : undefined,
             }}
           >
-
             {user.photoURL ? (
               <img
                 src={user.photoURL}
@@ -272,22 +211,13 @@ export function Sidebar() {
             ) : (
               user.displayName.charAt(0)
             )}
-
           </div>
-
 
           <div>
-
             <strong>{user.displayName}</strong>
-
-            <span className="role-badge">
-              {user.role}
-            </span>
-
+            <span className="role-badge">{user.role}</span>
           </div>
-
         </div>
-
 
         <button
           type="button"
@@ -297,10 +227,7 @@ export function Sidebar() {
           <LogOut size={16} />
           Logout
         </button>
-
       </div>
-
     </aside>
   );
 }
-

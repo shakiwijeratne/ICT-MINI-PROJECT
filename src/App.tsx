@@ -13,33 +13,18 @@ import { StudentDiaryPage } from './pages/student/Diary';
 import { StudentReportsPage } from './pages/student/Reports';
 import { StudentProgressPage } from './pages/student/Progress';
 import { StudentNotificationsPage } from './pages/student/Notifications';
-
 import { SupervisorDashboard } from './pages/supervisor/Dashboard';
-import {
-  SupervisorStudentsPage,
-  SupervisorAnalyticsPage,
-} from './pages/supervisor/Pages';
+import { SupervisorStudentsPage, SupervisorAnalyticsPage,} from './pages/supervisor/Pages';
 import { SupervisorDiaryReview } from './pages/supervisor/SupervisorDiaryReview';
 import { SupervisorNotificationsPage } from './pages/supervisor/Notifications';
 import { SupervisorEvaluationPage } from './pages/supervisor/evaluation';
-
-import { CompanyDashboard } from './pages/company/Pages';
-import { CompanyVerifyPage } from './pages/company/Pages';
-import { CompanyEvaluationsPage } from './pages/company/Pages';
+import { CompanyDashboard,CompanyVerifyPage,CompanyEvaluationsPage,} from './pages/company/Pages';
 import { CompanyNotificationsPage } from './pages/company/Notifications';
-
-import {
-  AdminDashboard,
-  AdminUsersPage,
-  AdminInternshipsPage,
-  AdminNotificationsPage,
-  AdminSettingsPage,
-} from './pages/admin/Pages';
-
+import { AdminDashboard,AdminUsersPage,AdminInternshipsPage,AdminNotificationsPage,AdminSettingsPage,} from './pages/admin/Pages';
 import { AdminAssignmentsPage } from './pages/admin/Assignments';
-
 import { InternshipProvider } from './contexts/InternshipContext';
 import { ProfilePage } from './pages/Profile/Profile';
+import { CompanyStudentsPage } from './pages/company/Students';
 
 
 function RootRedirect() {
@@ -59,21 +44,13 @@ function AppRoutes() {
   return (
     <Routes>
 
-      {/* =========================
-          PUBLIC ROUTES
-      ========================== */}
-
+      {/* Public routes */}
       <Route path="/" element={<RootRedirect />} />
-
       <Route path="/login" element={<LoginPage />} />
-
       <Route path="/register" element={<RegisterPage />} />
 
 
-      {/* =========================
-          STUDENT ROUTES
-      ========================== */}
-
+      {/* ================= STUDENT ================= */}
       <Route element={<ProtectedRoute allowedRoles={['student']} />}>
         <Route element={<AppLayout />}>
 
@@ -111,10 +88,7 @@ function AppRoutes() {
       </Route>
 
 
-      {/* =========================
-          SUPERVISOR ROUTES
-      ========================== */}
-
+      {/* ================= SUPERVISOR ================= */}
       <Route element={<ProtectedRoute allowedRoles={['supervisor']} />}>
         <Route element={<AppLayout />}>
 
@@ -126,6 +100,11 @@ function AppRoutes() {
           <Route
             path="/supervisor/students"
             element={<SupervisorStudentsPage />}
+          />
+
+          <Route
+            path="/supervisor/reports"
+            element={<SupervisorDiaryReview />}
           />
 
           <Route
@@ -157,10 +136,7 @@ function AppRoutes() {
       </Route>
 
 
-      {/* =========================
-          COMPANY ROUTES
-      ========================== */}
-
+      {/* ================= COMPANY ================= */}
       <Route element={<ProtectedRoute allowedRoles={['company']} />}>
         <Route element={<AppLayout />}>
 
@@ -189,14 +165,16 @@ function AppRoutes() {
             element={<CompanyNotificationsPage />}
           />
 
+          <Route
+            path="/company/students"
+            element={<CompanyStudentsPage />}
+          />
+
         </Route>
       </Route>
 
 
-      {/* =========================
-          ADMIN ROUTES
-      ========================== */}
-
+      {/* ================= ADMIN ================= */}
       <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
         <Route element={<AppLayout />}>
 
@@ -234,10 +212,7 @@ function AppRoutes() {
       </Route>
 
 
-      {/* =========================
-          FALLBACK ROUTE
-      ========================== */}
-
+      {/* Catch unknown URLs */}
       <Route
         path="*"
         element={<Navigate to="/" replace />}
@@ -251,19 +226,13 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-
       <AuthProvider>
 
-        {/* InternshipProvider must be inside AuthProvider */}
         <InternshipProvider>
-
           <AppRoutes />
-
         </InternshipProvider>
 
       </AuthProvider>
-
     </BrowserRouter>
   );
 }
-

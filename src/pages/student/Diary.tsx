@@ -21,14 +21,10 @@ import {
 import { enhanceDiaryEntry } from "../../services/geminiService";
 import { PageHeader, Card, EmptyState } from "../../components/ui";
 import type { DiaryEntry } from "../../types";
-
-// custom hook for saving drafts
-import { useFormDraft } from "../../hooks/useFormDraft"; 
-
+import { useFormDraft } from "../../hooks/useFormDraft";
 
 export function StudentDiaryPage() {
   const { user } = useAuth();
-  
   const { diaries: entries, refreshData } = useInternshipData();
 
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
@@ -42,27 +38,37 @@ export function StudentDiaryPage() {
   const [filterType, setFilterType] = useState("all");
   const [sortType, setSortType] = useState("newest");
 
-  const initialFormState = useMemo(() => ({
-    date: format(new Date(), "yyyy-MM-dd"),
-    title: "",
-    content: "",
-    tasksCompleted: "",
-    hoursWorked: 8,
-    skillsUsed: "",
-  }), []);
+  // ============================================================
+  // FUTURE DATE RESTRICTION
+  // Only today and previous dates are allowed.
+  // ============================================================
+  const today = format(new Date(), "yyyy-MM-dd");
+
+  const initialFormState = useMemo(
+    () => ({
+      date: format(new Date(), "yyyy-MM-dd"),
+      title: "",
+      content: "",
+      tasksCompleted: "",
+      hoursWorked: 8,
+      skillsUsed: "",
+    }),
+    []
+  );
 
   const draftKey = user?.uid ? `diary_draft_${user.uid}` : "";
-  const { 
-    formData: form, 
-    setFormData: setForm, 
-    clearDraft, 
-    hasDraft 
+
+  const {
+    formData: form,
+    setFormData: setForm,
+    clearDraft,
+    hasDraft,
   } = useFormDraft(draftKey, initialFormState);
 
-  // Update resetForm to wipe the draft from local storage
   const resetForm = () => {
     setEditingId(null);
-    clearDraft(); 
+    clearDraft();
+
     setForm({
       date: format(new Date(), "yyyy-MM-dd"),
       title: "",
@@ -71,18 +77,34 @@ export function StudentDiaryPage() {
       hoursWorked: 8,
       skillsUsed: "",
     });
+
+    setIsError(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!user?.uid) {
+      setIsError(true);
       setMessage("Failed: User is not authenticated.");
+      return;
+    }
+
+    // ============================================================
+    // FUTURE DATE VALIDATION
+    // Prevent submission even if a future date is manually entered.
+    // ============================================================
+    if (form.date > today) {
+      setIsError(true);
+      setMessage(
+        "Future dates are not allowed. Please select today or a previous date."
+      );
       return;
     }
 
     setLoading(true);
     setMessage("");
+    setIsError(false);
 
     try {
       const payload = {
@@ -90,57 +112,110 @@ export function StudentDiaryPage() {
         date: form.date,
         title: form.title,
         content: form.content,
-        tasksCompleted: form.tasksCompleted.split("\n").filter(Boolean),
+        tasksCompleted: form.tasksCompleted
+          .split("\n")
+          .filter((task) => task.trim() !== ""),
         hoursWorked: Number(form.hoursWorked),
-        skillsUsed: form.skillsUsed.split(",").map((s) => s.trim()).filter(Boolean),
+        skillsUsed: form.skillsUsed
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
         aiEnhanced: false,
         status: "pending" as const,
         createdAt: new Date().toISOString(),
       };
 
       if (editingId) {
+        // ========================================================
+        // UPDATE EXISTING DIARY
+        // ========================================================
         await updateDiary(editingId, payload);
-        setMessage("Diary updated successfully!");
-      } else {
-        await createDiary(payload);
-        setMessage("Diary saved successfully!");
-      }
 
-      resetForm(); // automatically clears the draft
-      await refreshData();
+        setMessage("Diary updated successfully!");
+
+        // Exit edit mode and clear any saved new-entry draft.
+        setEditingId(null);
+        clearDraft();
+
+        // Reload the latest diary data from Firestore/local storage.
+        await refreshData();
+
+        // Reset form only AFTER the updated data has been saved
+        // and refreshed.
+        setForm({
+          date: format(new Date(), "yyyy-MM-dd"),
+          title: "",
+          content: "",
+          tasksCompleted: "",
+          hoursWorked: 8,
+          skillsUsed: "",
+        });
+      } else {
+        // ========================================================
+        // CREATE NEW DIARY
+        // ========================================================
+        await createDiary(payload);
+
+        setMessage("Diary saved successfully!");
+
+        resetForm();
+
+        // Reload latest diary data.
+        await refreshData();
+      }
     } catch (error: any) {
       console.error("Save diary error details:", error);
-      setMessage(`Failed to save diary: ${error?.message || "Unknown error"}`);
+      setIsError(true);
+      setMessage(
+        `Failed to save diary: ${error?.message || "Unknown error"}`
+      );
     } finally {
       setLoading(false);
     }
   };
 
- const handleEnhance = async () => {
+  const handleEnhance = async () => {
     if (!form.content.trim()) return;
-    
+
     setAiLoading(true);
-    setMessage(""); // Clear previous alerts
+    setMessage("");
 
     try {
-      const enhanced = await enhanceDiaryEntry(form.content, form.title || "Diary Entry");
-      
-      // SUCCESS PATH: Only update form state when we get a real string back
-      setForm((previous: any) => ({ ...previous, content: enhanced }));
+      const enhanced = await enhanceDiaryEntry(
+        form.content,
+        form.title || "Diary Entry"
+      );
+
+      setForm((previous: any) => ({
+        ...previous,
+        content: enhanced,
+      }));
+
       setIsError(false);
       setMessage("AI enhancement applied successfully!");
     } catch (error: any) {
-      // FAILURE PATH: form.content is untouched! User's text remains completely safe.
       console.error("AI enhance error:", error);
       setIsError(true);
-      setMessage(`AI Enhancement Failed: Service unavailable`);
+      setMessage("AI Enhancement Failed: Service unavailable");
     } finally {
       setAiLoading(false);
     }
   };
 
+  // ============================================================
+  // EDIT DIARY ENTRY
+  // ============================================================
   const handleEdit = (entry: DiaryEntry) => {
+    // Important:
+    // Clear the new-entry draft first so useFormDraft cannot
+    // overwrite the values of the diary being edited.
+    clearDraft();
+
     setEditingId(entry.id);
+
+    setIsError(false);
+    setMessage("");
+
     setForm({
       date: entry.date,
       title: entry.title,
@@ -149,18 +224,22 @@ export function StudentDiaryPage() {
       hoursWorked: entry.hoursWorked,
       skillsUsed: entry.skillsUsed.join(", "),
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   };
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); 
+    e.stopPropagation();
     setEntryToDelete(id);
   };
 
   const confirmDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (!entryToDelete) return;
 
     try {
@@ -170,11 +249,12 @@ export function StudentDiaryPage() {
       if (selectedEntry?.id === entryToDelete) {
         setSelectedEntry(null);
       }
-      
+
       setEntryToDelete(null);
-      await refreshData(); 
+      await refreshData();
     } catch (error) {
       console.error("Delete diary error:", error);
+      setIsError(true);
       setMessage("Failed to delete diary from database");
     }
   };
@@ -197,23 +277,45 @@ export function StudentDiaryPage() {
         entry.tasksCompleted.join(" ").toLowerCase().includes(search);
 
       if (!matches) return false;
+
       if (filterType === "ai") return Boolean(entry.aiEnhanced);
-      if (filterType === "today") return entry.date === format(new Date(), "yyyy-MM-dd");
+
+      if (filterType === "today") {
+        return entry.date === format(new Date(), "yyyy-MM-dd");
+      }
+
       return true;
     });
 
     switch (sortType) {
-      case "oldest": data.sort((a, b) => a.date.localeCompare(b.date)); break;
-      case "hours": data.sort((a, b) => b.hoursWorked - a.hoursWorked); break;
-      case "title": data.sort((a, b) => a.title.localeCompare(b.title)); break;
-      default: data.sort((a, b) => b.date.localeCompare(a.date));
+      case "oldest":
+        data.sort((a, b) => a.date.localeCompare(b.date));
+        break;
+
+      case "hours":
+        data.sort((a, b) => b.hoursWorked - a.hoursWorked);
+        break;
+
+      case "title":
+        data.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+
+      default:
+        data.sort((a, b) => b.date.localeCompare(a.date));
     }
 
     return data;
   }, [entries, searchTerm, filterType, sortType]);
 
-  const totalHours = entries.reduce((sum, entry) => sum + entry.hoursWorked, 0);
-  const totalSkills = new Set(entries.flatMap((entry) => entry.skillsUsed)).size;
+  const totalHours = entries.reduce(
+    (sum, entry) => sum + entry.hoursWorked,
+    0
+  );
+
+  const totalSkills = new Set(
+    entries.flatMap((entry) => entry.skillsUsed)
+  ).size;
+
   const aiCount = entries.filter((entry) => entry.aiEnhanced).length;
 
   return (
@@ -266,21 +368,41 @@ export function StudentDiaryPage() {
       </div>
 
       <div className="grid-2">
-        {/*CREATE / UPDATE FORM*/}
         <Card>
-          {/* Draft Status Indicator */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0 }}>{editingId ? "Edit Diary Entry" : "New Diary Entry"}</h3>
-            
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "1rem",
+            }}
+          >
+            <h3 style={{ margin: 0 }}>
+              {editingId ? "Edit Diary Entry" : "New Diary Entry"}
+            </h3>
+
             {hasDraft && !editingId && (
-              <span style={{ fontSize: '0.85rem', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}>
+              <span
+                style={{
+                  fontSize: "0.85rem",
+                  color: "#059669",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontWeight: 500,
+                }}
+              >
                 <Save size={14} /> Draft Auto-Saved
               </span>
             )}
           </div>
 
           {message && (
-            <div className={`alert ${isError ? "alert-error" : "alert-success"}`}>
+            <div
+              className={`alert ${
+                isError ? "alert-error" : "alert-success"
+              }`}
+            >
               {message}
             </div>
           )}
@@ -291,7 +413,26 @@ export function StudentDiaryPage() {
               <input
                 type="date"
                 value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
+                max={today}
+                onChange={(e) => {
+                  const selectedDate = e.target.value;
+
+                  if (selectedDate > today) {
+                    setIsError(true);
+                    setMessage(
+                      "Future dates are not allowed. Please select today or a previous date."
+                    );
+                    return;
+                  }
+
+                  setIsError(false);
+                  setMessage("");
+
+                  setForm({
+                    ...form,
+                    date: selectedDate,
+                  });
+                }}
                 required
               />
             </label>
@@ -300,7 +441,12 @@ export function StudentDiaryPage() {
               Title
               <input
                 value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    title: e.target.value,
+                  })
+                }
                 required
                 placeholder="Database migration task"
               />
@@ -311,7 +457,12 @@ export function StudentDiaryPage() {
               <textarea
                 rows={6}
                 value={form.content}
-                onChange={(e) => setForm({ ...form, content: e.target.value })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    content: e.target.value,
+                  })
+                }
                 required
                 placeholder="Describe what you did today..."
               />
@@ -322,7 +473,12 @@ export function StudentDiaryPage() {
               <textarea
                 rows={3}
                 value={form.tasksCompleted}
-                onChange={(e) => setForm({ ...form, tasksCompleted: e.target.value })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    tasksCompleted: e.target.value,
+                  })
+                }
                 placeholder="One task per line"
               />
             </label>
@@ -335,7 +491,12 @@ export function StudentDiaryPage() {
                   min={1}
                   max={12}
                   value={form.hoursWorked}
-                  onChange={(e) => setForm({ ...form, hoursWorked: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      hoursWorked: Number(e.target.value),
+                    })
+                  }
                 />
               </label>
 
@@ -343,7 +504,12 @@ export function StudentDiaryPage() {
                 Skills Used
                 <input
                   value={form.skillsUsed}
-                  onChange={(e) => setForm({ ...form, skillsUsed: e.target.value })}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      skillsUsed: e.target.value,
+                    })
+                  }
                   placeholder="React, SQL, Git"
                 />
               </label>
@@ -370,7 +536,6 @@ export function StudentDiaryPage() {
                 </button>
               )}
 
-              {/* Explicit manual clear draft button - to discard unsubmitted data */}
               {!editingId && hasDraft && (
                 <button
                   type="button"
@@ -387,13 +552,18 @@ export function StudentDiaryPage() {
                 disabled={loading}
               >
                 <Plus size={16} />
-                {editingId ? "Update Entry" : "Save Entry"}
+                {loading
+                  ? editingId
+                    ? "Updating..."
+                    : "Saving..."
+                  : editingId
+                  ? "Update Entry"
+                  : "Save Entry"}
               </button>
             </div>
           </form>
         </Card>
 
-        {/*PREVIOUS DIARY ENTRIES*/}
         <Card>
           <div
             style={{
@@ -424,6 +594,7 @@ export function StudentDiaryPage() {
                     top: "10px",
                   }}
                 />
+
                 <input
                   type="text"
                   placeholder="Search..."
@@ -509,66 +680,135 @@ export function StudentDiaryPage() {
             </div>
           )}
         </Card>
-        
-        {/* DIARY VIEW MODAL */}
+
         {selectedEntry && (
           <div style={modalOverlayStyle}>
             <div className="card" style={modalContentStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem', marginBottom: '1rem' }}>
-                <h2 style={{ margin: 0, color: '#0f172a' }}>{selectedEntry.title}</h2>
-                <span style={{ color: '#64748b', fontWeight: 500 }}>{selectedEntry.date}</span>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  borderBottom: "1px solid #e2e8f0",
+                  paddingBottom: "1rem",
+                  marginBottom: "1rem",
+                }}
+              >
+                <h2 style={{ margin: 0, color: "#0f172a" }}>
+                  {selectedEntry.title}
+                </h2>
+
+                <span style={{ color: "#64748b", fontWeight: 500 }}>
+                  {selectedEntry.date}
+                </span>
               </div>
-              
-              <div style={{ marginBottom: '1.5rem', color: '#334155' }}>
-                <p><strong>Hours Logged:</strong> {selectedEntry.hoursWorked}h</p>
-                <p><strong>Description:</strong></p>
-                <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{selectedEntry.content}</p>
-                
+
+              <div style={{ marginBottom: "1.5rem", color: "#334155" }}>
+                <p>
+                  <strong>Hours Logged:</strong>{" "}
+                  {selectedEntry.hoursWorked}h
+                </p>
+
+                <p>
+                  <strong>Description:</strong>
+                </p>
+
+                <p
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    lineHeight: "1.6",
+                  }}
+                >
+                  {selectedEntry.content}
+                </p>
+
                 {selectedEntry.tasksCompleted?.length > 0 && (
                   <>
-                    <p><strong>Tasks Completed:</strong></p>
-                    <ul style={{ paddingLeft: '1.5rem', lineHeight: '1.6' }}>
-                      {selectedEntry.tasksCompleted.map((task, i) => <li key={i}>{task}</li>)}
+                    <p>
+                      <strong>Tasks Completed:</strong>
+                    </p>
+
+                    <ul
+                      style={{
+                        paddingLeft: "1.5rem",
+                        lineHeight: "1.6",
+                      }}
+                    >
+                      {selectedEntry.tasksCompleted.map((task, i) => (
+                        <li key={i}>{task}</li>
+                      ))}
                     </ul>
                   </>
                 )}
-                
+
                 {selectedEntry.skillsUsed?.length > 0 && (
-                  <p><strong>Skills:</strong> {selectedEntry.skillsUsed.join(', ')}</p>
+                  <p>
+                    <strong>Skills:</strong>{" "}
+                    {selectedEntry.skillsUsed.join(", ")}
+                  </p>
                 )}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button className="btn btn-outline" onClick={() => setSelectedEntry(null)}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                }}
+              >
+                <button
+                  className="btn btn-outline"
+                  onClick={() => setSelectedEntry(null)}
+                >
                   Close
                 </button>
               </div>
             </div>
           </div>
         )}
-        
-        {/* DELETE CONFIRMATION MODAL*/}
+
         {entryToDelete && (
           <div style={modalOverlayStyle} onClick={cancelDelete}>
-            <div 
-              className="card" 
-              style={{ ...modalContentStyle, maxWidth: '400px', textAlign: 'center' }}
-              onClick={(e) => e.stopPropagation()} 
+            <div
+              className="card"
+              style={{
+                ...modalContentStyle,
+                maxWidth: "400px",
+                textAlign: "center",
+              }}
+              onClick={(e) => e.stopPropagation()}
             >
-              <h3 style={{ marginTop: 0, color: '#0f172a' }}>Delete Entry</h3>
-              <p style={{ color: '#475569' }}>Are you sure you want to delete this diary entry? This action cannot be undone.</p>
-              
-              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem' }}>
-                <button 
-                  type="button"  
-                  className="btn btn-primary danger" 
+              <h3
+                style={{
+                  marginTop: 0,
+                  color: "#0f172a",
+                }}
+              >
+                Delete Entry
+              </h3>
+
+              <p style={{ color: "#475569" }}>
+                Are you sure you want to delete this diary entry? This action
+                cannot be undone.
+              </p>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "1rem",
+                  justifyContent: "center",
+                  marginTop: "1.5rem",
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-primary danger"
                   onClick={confirmDelete}
                 >
                   Yes, Sure
                 </button>
-                <button 
-                  type="button"  
-                  className="btn btn-outline" 
+
+                <button
+                  type="button"
+                  className="btn btn-outline"
                   onClick={cancelDelete}
                 >
                   No, Cancel
@@ -578,29 +818,32 @@ export function StudentDiaryPage() {
           </div>
         )}
       </div>
-    </div>  
+    </div>
   );
 }
 
 const modalOverlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 0, left: 0, right: 0, bottom: 0,
-  backgroundColor: 'rgba(0, 0, 0, 0.4)', 
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0, 0, 0, 0.4)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   zIndex: 9999,
-  padding: '1rem'
+  padding: "1rem",
 };
 
 const modalContentStyle: React.CSSProperties = {
-  width: '100%',
-  maxWidth: '600px',
-  maxHeight: '85vh',
-  overflowY: 'auto',
-  backgroundColor: '#ffffff', 
-  border: '1px solid #e2e8f0', 
-  color: '#0f172a', 
-  padding: '24px',
-  borderRadius: '12px'
+  width: "100%",
+  maxWidth: "600px",
+  maxHeight: "85vh",
+  overflowY: "auto",
+  backgroundColor: "#ffffff",
+  border: "1px solid #e2e8f0",
+  color: "#0f172a",
+  padding: "24px",
+  borderRadius: "12px",
 };

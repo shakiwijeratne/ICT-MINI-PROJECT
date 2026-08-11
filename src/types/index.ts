@@ -42,17 +42,18 @@ export interface Internship {
   studentId: string;
   studentName: string;
   position: string;
-  companyId: string; 
-  supervisorId: string; 
+  companyId: string;
+  supervisorId: string;
   companyName: string;
   companySupervisor: string;
-  universitySupervisorId?: string; // Optional/legacy support if you are transitioning to just supervisorId
+  companySupervisorEmail?: string;
+  companySupervisorDesignation?: string;
+  universitySupervisorId?: string;
   startDate: string;
   endDate: string;
   status: 'active' | 'completed' | 'pending';
   progress: number;
 }
-
 export interface DiaryEntry {
   id: string;
   studentId: string;
